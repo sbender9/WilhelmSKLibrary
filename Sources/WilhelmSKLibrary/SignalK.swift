@@ -217,6 +217,7 @@ nonisolated(unsafe) let defaultNonPrefUnitConversion :[String:Dimension] = [
   UnitElectricCharge.coulombs.symbol: UnitElectricCharge.ampereHours,
   UnitElectricCurrent.amperes.symbol: UnitElectricCurrent.amperes,
   UnitEnergy.joules.symbol: UnitEnergy.kilowattHours,
+  RatioUnit.ratio.symbol: RatioUnit.percent
 ]
 
 nonisolated(unsafe) let defaultUnitConversion :[String:UnitTypes] = [
@@ -227,8 +228,8 @@ nonisolated(unsafe) let defaultUnitConversion :[String:UnitTypes] = [
 ]
 
 final class RatioUnit: Dimension {
-  nonisolated(unsafe) static let ratio = RatioUnit(symbol: "ratio", converter: UnitConverterLinear(coefficient: 1.0))
-  nonisolated(unsafe) static let percent = RatioUnit(symbol: "%", converter: UnitConverterLinear(coefficient: 100))
+  nonisolated(unsafe) static let ratio = RatioUnit(symbol: "ratio", converter: UnitConverterLinear(coefficient: 100))
+  nonisolated(unsafe) static let percent = RatioUnit(symbol: "%", converter: UnitConverterLinear(coefficient: 1.0))
   
   override class func baseUnit() -> RatioUnit {
     return percent
