@@ -8,7 +8,6 @@
 
 import Foundation
 import Combine
-import WilhelmSKLibrary
 
 @available(iOS 17, *)
 open class RESTSignalK : SignalKBase, @unchecked Sendable {
