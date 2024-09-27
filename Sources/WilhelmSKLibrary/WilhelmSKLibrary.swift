@@ -4,16 +4,17 @@ nonisolated(unsafe) private var unitPreferences : [UnitTypes:Dimension]?
 
 
 @available(iOS 17, *)
-@MainActor var signalK: SignalKServer?
+//@MainActor
+var signalK: SignalKServer?
 
 @available(iOS 17, *)
-@MainActor
+//@MainActor
 public func getSignalK() -> SignalKServer {
   return signalK!
 }
 
 @available(iOS 17, *)
-@MainActor
+//@MainActor
 public func setSignalK(_ sk : SignalKServer )
 {
   signalK = sk
