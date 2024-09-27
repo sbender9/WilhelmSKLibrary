@@ -19,7 +19,7 @@ open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKS
   
   let session: URLSession
   var timer: Timer?
-  
+    
   public init(host: String, updateRate: Double = 0 )
   {
     session = URLSession(configuration: .default)
@@ -33,7 +33,6 @@ open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKS
     self.restEndpoint = restEndpoint
     self.updateRate = updateRate
   }
-
   
   @MainActor
   func sendHttpRequest(urlString: String, method: String, body: Data?) async throws -> Any? {
@@ -82,6 +81,14 @@ open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKS
       path.info.updateMeta(meta)
       
       path.value = res
+
+      if let timestamp = info["timestamp"] as? String {
+        do {
+          path.timestamp = try Date(timestamp, strategy: Date.ISO8601FormatStyle.iso8601withFractionalSeconds)
+        } catch {
+          print(error)
+        }
+      }
       
       startTimer()
       
@@ -148,7 +155,6 @@ open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKS
     
     return skPath!
   }
-
 }
 
 @available(iOS 16, *)
@@ -157,6 +163,7 @@ public enum SignalKError: Swift.Error, CustomLocalizedStringResourceConvertible 
   case invalidServerResponse
   case message(_ message: String)
   
+  @available(watchOS 9, *)
   public var localizedStringResource: LocalizedStringResource {
     switch self {
     case let .message(message): return "\(message)"
@@ -164,4 +171,9 @@ public enum SignalKError: Swift.Error, CustomLocalizedStringResourceConvertible 
     case .invalidServerResponse: return "Invalid error response"
     }
   }
+}
+
+@available(iOS 16, *)
+private extension ParseStrategy where Self == Date.ISO8601FormatStyle {
+  static var iso8601withFractionalSeconds: Self { .init(includingFractionalSeconds: true) }
 }
