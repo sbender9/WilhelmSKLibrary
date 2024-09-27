@@ -36,7 +36,7 @@ open class SignalKBase: NSObject, SignalKServer {
   
   open func getQuck(_ path: String, source: String?) -> SKValue? {
     if let source {
-      if var sourceMap = sources[source] {
+      if let sourceMap = sources[source] {
         return sourceMap[path]
       }
     }
