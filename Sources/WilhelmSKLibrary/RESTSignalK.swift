@@ -8,28 +8,27 @@
 
 import Foundation
 import Combine
+import WilhelmSKLibrary
 
 @available(iOS 17, *)
-open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKServer
-{
-  //nonisolated(unsafe)
-  //public static let shared = RESTSignalK()
+open class RESTSignalK : SignalKBase, @unchecked Sendable {
+  
   let restEndpoint: String
   let updateRate: Double
   
-  let session: URLSession
+  //let session: URLSession
   var timer: Timer?
     
   public init(host: String, updateRate: Double = 0 )
   {
-    session = URLSession(configuration: .default)
+    //session = URLSession(configuration: .default)
     self.restEndpoint = "\(host)/signalk/v1/api/"
     self.updateRate = updateRate
   }
   
   public init(restEndpoint: String, updateRate: Double = 0 )
   {
-    session = URLSession(configuration: .default)
+    //session = URLSession(configuration: .default)
     self.restEndpoint = restEndpoint
     self.updateRate = updateRate
   }
@@ -42,7 +41,8 @@ open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKS
     request.httpBody = body
     
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    
+
+    let session = URLSession(configuration: .default)
     let (data, resp) = try await session.data(for: request)
     let status = (resp as! HTTPURLResponse).statusCode
     guard status == 200 else { throw SignalKError.message("invalid server response \(status)") }
@@ -59,34 +59,43 @@ open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKS
   {
     return try await sendHttpRequest(urlString: urlString, method: "GET", body: nil)
   }
-  
-  private var paths: [String: SKPath] = [:]
-  
-  public func get(_ path: String) -> SKPath? {
-    return paths[path]
-  }
-  
+    
   @MainActor
-  private func updatePath(_ path: SKPath) async throws {
-    let urlString = "vessels/self/\(path.info.path.replacingOccurrences(of: ".", with: "/"))"
+  private func updatePath(_ value: SKValue) async throws {
+    let path = value.info.path
+    let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     
     do {
       //let theType = type(of: path)
       guard let info = try await sendGet(urlString) as? [String:Any] else { throw SignalKError.invalidServerResponse }
-      let res = info["value"]
+      guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
       
-      //let myPath = get(path.info.path)
       let meta = info["meta"] as? [String: Any]
+      value.info.updateMeta(meta)
       
-      path.info.updateMeta(meta)
-      
-      path.value = res
+      let values = info["values"] as? [String:[String:Any]]
 
-      if let timestamp = info["timestamp"] as? String {
-        do {
-          path.timestamp = try Date(timestamp, strategy: Date.ISO8601FormatStyle.iso8601withFractionalSeconds)
-        } catch {
-          print(error)
+      if value.source != nil {
+        value.value = values?[source]?["value"]
+        
+        if let unSourced = get(path, source: nil) {
+          unSourced.value = value.value
+          unSourced.info.updateMeta(meta)
+          unSourced.setTimestamp(values?[source]?["timestamp"] as? String)
+        }
+      } else {
+        value.value = info["value"]
+        value.source = source
+        value.setTimestamp(info["timestamp"] as? String)
+      }
+      
+      if values != nil {
+        for (key, vmap) in values! {
+          if let v = get(path, source: key) {
+            v.value = vmap["value"]
+            v.info.updateMeta(meta)
+            v.setTimestamp(vmap["timestamp"] as? String)
+          }
         }
       }
       
@@ -99,7 +108,7 @@ open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKS
   
   //@MainActor
   private func updatePaths() async {
-    for path in paths.values {
+    for path in getValues().values {
       do {
         try await updatePath(path)
       } catch {
@@ -119,41 +128,29 @@ open class RESTSignalK : NSObject, @unchecked Sendable, @preconcurrency SignalKS
   }
   
   //@MainActor
-  public func getObservableSelfPath(_ path: String) -> SKPath
+  override public func getObservableSelfPath(_ path: String, source: String? = nil) -> SKValue
   {
-    var skPath = paths[path]
-    
-    if skPath == nil {
-      let pathInfo = SKPathInfo(path, meta: nil)
-      skPath = SKPath(pathInfo)
-      paths[path] = skPath
-    }
+    let value = getOrCreateValue(path, source: source)
     
     Task {
       do {
-        try await updatePath(skPath!)
+        try await updatePath(value)
       } catch {
         print(error)
       }
     }
     
-    return skPath!
+    return value
   }
  
   //@MainActor
-  public func getSelfPath(_ path: String) async throws -> SKPath
+  override public func getSelfPath(_ path: String, source: String? = nil) async throws -> SKValue
   {
-    var skPath = paths[path]
+    let value = getOrCreateValue(path, source: source)
     
-    if skPath == nil {
-      let pathInfo = SKPathInfo(path, meta: nil)
-      skPath = SKPath(pathInfo)
-      paths[path] = skPath
-    }
+    try await updatePath(value)
     
-    try await updatePath(skPath!)
-    
-    return skPath!
+    return value
   }
 }
 
@@ -173,7 +170,3 @@ public enum SignalKError: Swift.Error, CustomLocalizedStringResourceConvertible 
   }
 }
 
-@available(iOS 16, *)
-private extension ParseStrategy where Self == Date.ISO8601FormatStyle {
-  static var iso8601withFractionalSeconds: Self { .init(includingFractionalSeconds: true) }
-}

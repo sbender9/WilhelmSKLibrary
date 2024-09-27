@@ -14,25 +14,12 @@ private let cacheTimeout : TimeInterval = -30
 @available(iOS 17, *)
 public protocol SignalKServer : AnyObject
 {
-  func getObservableSelfPath(_ path: String) -> SKPath
-  func getSelfPath(_ path: String) async throws -> SKPath
+  func getObservableSelfPath(_ path: String, source: String?) -> SKValue
+  func getSelfPath(_ path: String, source: String?) async throws -> SKValue
 }
 
-/*
-public class SignalKBase : SignalK
-{
-  public func getObservableSelfPath(_ path: String) -> SKPath
-  {
-  }
-  
-  public func getSelfPath(_ path: String) async throws -> SKPath
-  {
-  }
-}
-*/
-
-@objc
-public class SKPathInfo: NSObject, ObservableObject, @unchecked Sendable {
+@available(iOS 17, *)
+final public class SKPathInfo: NSObject, ObservableObject, @unchecked Sendable {
   let id: String
   public let path: String
   @Published public private(set) var meta: [String: Any]?
@@ -40,7 +27,7 @@ public class SKPathInfo: NSObject, ObservableObject, @unchecked Sendable {
   //@Published public private(set) var units: String?
   public private(set) var units: Dimension?
   
-  public init(_ path: String, meta: [String : Any]?) {
+  public init(_ path: String, meta: [String : Any]? = nil) {
     self.id = path
     self.path = path
     self.meta = meta
@@ -70,20 +57,32 @@ public class SKPathInfo: NSObject, ObservableObject, @unchecked Sendable {
 }
 
 @available(iOS 17, *)
-@objc
-public class SKPath: NSObject, ObservableObject, @unchecked Sendable
+final public class SKValue: NSObject, ObservableObject, @unchecked Sendable
 {
   @Published public var info: SKPathInfo
   @Published public var value: Any?
+  public var source: String?
   @Published public var timestamp: Date?
   
   public init(_ info: SKPathInfo) {
     self.info = info
   }
   
-  public init(_ info: SKPathInfo, value: Any?) {
+  public init(_ info: SKPathInfo, value: Any?, source: String? = nil) {
     self.info = info
     self.value = value
+    self.source = source
+  }
+  
+  public func setTimestamp(_ times: String?)
+  {
+    if let times {
+      do {
+        timestamp = try Date(times, strategy: Date.ISO8601FormatStyle.iso8601withFractionalSeconds)
+      } catch {
+        //print(error)
+      }
+    }
   }
   
   public func getMeasurement(_ type: UnitTypes? = nil) -> Measurement<Dimension>? {
@@ -142,6 +141,11 @@ public class SKPath: NSObject, ObservableObject, @unchecked Sendable
   public func stringValue() -> String? {
     return value as? String
   }
+}
+
+@available(iOS 16, *)
+private extension ParseStrategy where Self == Date.ISO8601FormatStyle {
+  static var iso8601withFractionalSeconds: Self { .init(includingFractionalSeconds: true) }
 }
 
 
