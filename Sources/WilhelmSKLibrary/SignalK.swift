@@ -31,7 +31,8 @@ public class SignalKBase : SignalK
 }
 */
 
-public class SKPathInfo: ObservableObject, @unchecked Sendable {
+@objc
+public class SKPathInfo: NSObject, ObservableObject, @unchecked Sendable {
   let id: String
   public let path: String
   @Published public private(set) var meta: [String: Any]?
@@ -69,13 +70,20 @@ public class SKPathInfo: ObservableObject, @unchecked Sendable {
 }
 
 @available(iOS 17, *)
-public class SKPath: ObservableObject, @unchecked Sendable
+@objc
+public class SKPath: NSObject, ObservableObject, @unchecked Sendable
 {
   @Published public var info: SKPathInfo
   @Published public var value: Any?
+  @Published public var timestamp: Date?
   
   public init(_ info: SKPathInfo) {
     self.info = info
+  }
+  
+  public init(_ info: SKPathInfo, value: Any?) {
+    self.info = info
+    self.value = value
   }
   
   public func getMeasurement(_ type: UnitTypes? = nil) -> Measurement<Dimension>? {
@@ -104,6 +112,11 @@ public class SKPath: ObservableObject, @unchecked Sendable
     }
     
     if let theType {
+      if let prefs = getUnitPreferences() {
+        if let unit = prefs[theType] {
+          return unit
+        }
+      }
       return defaultUnits[theType]
     }
     
@@ -160,7 +173,7 @@ let unitsNames : [String:String] = [
   kWatts: "Watts"
 ]*/
 
-public enum UnitTypes: String {
+public enum UnitTypes: String, CaseIterable {
   case longDistance = "units.Long Distance"
   case shortDistance = "units.Short Distance"
   case windSpeed = "units.Wind Speed"
@@ -195,7 +208,7 @@ nonisolated(unsafe) let defaultUnits : [UnitTypes:Dimension] = [
   //.fuelEconomy: kFuelEconomy,
 ]
 
-nonisolated(unsafe) let skToSwiftUnits :[String:Dimension] = [
+public nonisolated(unsafe) let skToSwiftUnits :[String:Dimension] = [
   UnitAngle.radians.symbol: UnitAngle.radians,
   UnitDuration.seconds.symbol: UnitDuration.seconds,
   UnitElectricCharge.coulombs.symbol: UnitElectricCharge.coulombs,
@@ -234,3 +247,4 @@ final class RatioUnit: Dimension {
   override class func baseUnit() -> RatioUnit {
     return percent
   }}
+
