@@ -74,7 +74,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
       
       let values = info["values"] as? [String:[String:Any]]
 
-      if value.source != nil {
+      if value.source != nil && values != nil {
         value.value = values?[source]?["value"]
         
         if let unSourced = get(path, source: nil) {
