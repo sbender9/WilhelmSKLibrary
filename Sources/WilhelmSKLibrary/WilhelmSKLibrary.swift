@@ -1,5 +1,7 @@
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
+import Foundation
+
+nonisolated(unsafe) private var unitPreferences : [UnitTypes:Dimension]?
+
 
 @available(iOS 17, *)
 @MainActor var signalK: SignalKServer?
@@ -17,3 +19,12 @@ public func setSignalK(_ sk : SignalKServer )
   signalK = sk
 }
 
+public func setUnitPreferences(_ preferences: [UnitTypes:Dimension])
+{
+  unitPreferences = preferences
+}
+
+public func getUnitPreferences() -> [UnitTypes:Dimension]?
+{
+  return unitPreferences
+}
