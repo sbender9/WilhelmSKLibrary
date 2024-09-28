@@ -9,8 +9,6 @@ import SwiftUI
 import WilhelmSKLibrary
 import WilhelmSKDummyGauges
 
-let thePath = "environment.wind.speedApparent"
-
 struct ContentView: View {
   let config: GaugeConfig
   

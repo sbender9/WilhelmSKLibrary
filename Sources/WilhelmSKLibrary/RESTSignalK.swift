@@ -101,7 +101,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
       startTimer()
       
     } catch {
-      print(error)
+      //print(error)
     }
   }
   
@@ -111,7 +111,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
       do {
         try await updatePath(path)
       } catch {
-        print(error)
+        //print(error)
       }
     }
   }

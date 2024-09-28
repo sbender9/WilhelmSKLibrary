@@ -10,7 +10,7 @@ import WilhelmSKLibrary
 import WilhelmSKDummyGauges
 
 let myUnitPrefs : [UnitTypes:Dimension] = [
-  .longDistance: UnitLength.miles,
+  .longDistance: UnitLength.nauticalMiles,
   .shortDistance: UnitLength.feet,
   .windSpeed: UnitSpeed.knots,
   .speed: UnitSpeed.knots,
@@ -33,9 +33,9 @@ struct ExampleAppApp: App {
     WilhelmSKLibrary.setSignalK(WilhelmSKLibrary.RESTSignalK(host:host, updateRate: 3.0))
   }
 
-    var body: some Scene {
-      WindowGroup {
-        ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.defaultTheme())
-      }
+  var body: some Scene {
+    WindowGroup {
+      ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.defaultTheme())
     }
+  }
 }
