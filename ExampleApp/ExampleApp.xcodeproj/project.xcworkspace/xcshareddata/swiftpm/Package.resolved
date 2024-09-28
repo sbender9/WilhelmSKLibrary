@@ -1,13 +1,13 @@
 {
-  "originHash" : "bc759d26857748fb09034f10ac3c45af39806b13ffbe16708cc25735ef36cf10",
+  "originHash" : "ee644650c9f6b1b9b1c21f8ec62965b57f288e71d40cc57ef1dfc6987b0203da",
   "pins" : [
     {
       "identity" : "wilhelmskdummygauges",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sbender9/WilhelmSKDummyGauges.git",
+      "location" : "https://github.com/sbender9/WilhelmSKDummyGauges",
       "state" : {
-        "revision" : "41c010c21eed94e0eba6fd7afa451b2244007d3c",
-        "version" : "0.0.2"
+        "revision" : "fd08f5591da44f865d644360120dd998eab7200d",
+        "version" : "1.0.1"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sbender9/WilhelmSKLibrary",
       "state" : {
-        "revision" : "0d1287ec36fba936c74c9c6c3fe0a6fba9830772",
-        "version" : "0.0.5"
+        "revision" : "4e912640e137e131a4fe7c449ac664d7753b3023",
+        "version" : "1.0.1"
       }
     }
   ],

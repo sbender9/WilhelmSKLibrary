@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D8C90C3C2CA8446600DD314C /* WilhelmSKDummyGauges in Frameworks */ = {isa = PBXBuildFile; productRef = D8C90C3B2CA8446600DD314C /* WilhelmSKDummyGauges */; };
+		D86EF1AB2CA8761D002A5EE2 /* WilhelmSKDummyGauges in Frameworks */ = {isa = PBXBuildFile; productRef = D86EF1AA2CA8761D002A5EE2 /* WilhelmSKDummyGauges */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,7 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D8C90C3C2CA8446600DD314C /* WilhelmSKDummyGauges in Frameworks */,
+				D86EF1AB2CA8761D002A5EE2 /* WilhelmSKDummyGauges in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -125,7 +125,7 @@
 			);
 			name = ExampleApp;
 			packageProductDependencies = (
-				D8C90C3B2CA8446600DD314C /* WilhelmSKDummyGauges */,
+				D86EF1AA2CA8761D002A5EE2 /* WilhelmSKDummyGauges */,
 			);
 			productName = ExampleApp;
 			productReference = D8C90C0C2CA8428500DD314C /* ExampleApp.app */;
@@ -210,7 +210,7 @@
 			mainGroup = D8C90C032CA8428500DD314C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				D8C90C392CA842DA00DD314C /* XCRemoteSwiftPackageReference "WilhelmSKDummyGauges" */,
+				D86EF1A92CA8761D002A5EE2 /* XCRemoteSwiftPackageReference "WilhelmSKDummyGauges" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D8C90C0D2CA8428500DD314C /* Products */;
@@ -577,20 +577,20 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		D8C90C392CA842DA00DD314C /* XCRemoteSwiftPackageReference "WilhelmSKDummyGauges" */ = {
+		D86EF1A92CA8761D002A5EE2 /* XCRemoteSwiftPackageReference "WilhelmSKDummyGauges" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sbender9/WilhelmSKDummyGauges.git";
+			repositoryURL = "https://github.com/sbender9/WilhelmSKDummyGauges";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.0.1;
+				minimumVersion = 1.0.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		D8C90C3B2CA8446600DD314C /* WilhelmSKDummyGauges */ = {
+		D86EF1AA2CA8761D002A5EE2 /* WilhelmSKDummyGauges */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = D8C90C392CA842DA00DD314C /* XCRemoteSwiftPackageReference "WilhelmSKDummyGauges" */;
+			package = D86EF1A92CA8761D002A5EE2 /* XCRemoteSwiftPackageReference "WilhelmSKDummyGauges" */;
 			productName = WilhelmSKDummyGauges;
 		};
 /* End XCSwiftPackageProductDependency section */
