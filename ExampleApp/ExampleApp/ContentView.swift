@@ -12,7 +12,7 @@ import WilhelmSKDummyGauges
 struct ContentView: View {
   let config: GaugeConfig
   
-  @ObservedObject var speed : SKValue
+  @ObservedObject var speed : SKValue<Double>
   let gradient = Gradient(colors: [.green, .yellow, .red])
   
   init(_ boat: SignalKBase, config: GaugeConfig, theme: Theme) {
@@ -23,7 +23,7 @@ struct ContentView: View {
 
   var body: some View {
     let measurement = speed.getMeasurement(.windSpeed)
-    let val = measurement?.value ?? speed.doubleValue() ?? 0
+    let val = measurement?.value ?? speed.value ?? 0
     
     VStack {
       Text(speed.info.displayName ?? config.title)
@@ -50,5 +50,5 @@ struct ContentView: View {
 }
 
 #Preview {
-  ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.defaultTheme())
+  ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.theDefault())
 }

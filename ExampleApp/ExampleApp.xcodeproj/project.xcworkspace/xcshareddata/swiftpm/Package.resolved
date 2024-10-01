@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sbender9/WilhelmSKDummyGauges",
       "state" : {
-        "revision" : "fd08f5591da44f865d644360120dd998eab7200d",
-        "version" : "1.0.1"
+        "revision" : "53e70e02853f986ae2834cfb6e2db98b277f193e",
+        "version" : "1.1.1"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sbender9/WilhelmSKLibrary",
       "state" : {
-        "revision" : "4e912640e137e131a4fe7c449ac664d7753b3023",
-        "version" : "1.0.1"
+        "revision" : "0d082efdce01f689dc8ad6789f193650f0dbf911",
+        "version" : "1.0.2"
       }
     }
   ],
