@@ -14,6 +14,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
   
   let restEndpoint: String
   let updateRate: Double
+  public var cacheAge : TimeInterval = 1.0
   
   //let session: URLSession
   var timer: Timer?
@@ -44,9 +45,28 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
     let session = URLSession(configuration: .default)
     let (data, resp) = try await session.data(for: request)
     let status = (resp as! HTTPURLResponse).statusCode
-    guard status == 200 else { throw SignalKError.message("invalid server response \(status)") }
+    guard status != 401 else { throw SignalKError.unauthorized }
+    guard status == 200 else { throw SignalKError.message("Invalid server response \(status)") }
     //print(status)
     //print(String(data: data, encoding: .utf8))
+    
+    let dict = try JSONSerialization.jsonObject(with: data, options: [])
+    
+    return dict
+  }
+  
+  @MainActor
+  func sendHttpRequestIgnoringStatus(urlString: String, method: String, body: Data?) async throws -> Any? {
+    guard let url = URL(string: "\(restEndpoint)\(urlString)") else { return nil }
+    var request = URLRequest(url: url)
+    request.httpMethod = method
+    request.httpBody = body
+    
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    let session = URLSession(configuration: .default)
+    let (data, resp) = try await session.data(for: request)
+    let status = (resp as! HTTPURLResponse).statusCode
     
     let dict = try JSONSerialization.jsonObject(with: data, options: [])
     
@@ -58,40 +78,65 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
   {
     return try await sendHttpRequest(urlString: urlString, method: "GET", body: nil)
   }
-    
+  
   @MainActor
-  private func updatePath(_ value: SKValue) async throws {
+  func sendPut(_ urlString: String, data: Any?) async throws -> Any? {
+    guard JSONSerialization.isValidJSONObject(data) else { throw SignalKError.message("invalid put data") }
+    let putData = try JSONSerialization.data(withJSONObject: data)
+    return try await sendHttpRequestIgnoringStatus(urlString: urlString, method: "PUT", body: putData)
+  }
+
+        
+  @MainActor
+  private func updatePath(_ value: SKValueBase) async throws -> Bool {
     let path = value.info.path
     let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+    
+    if value.updated != nil && value.updated!.addingTimeInterval(cacheAge) > Date() {
+      return false
+    }
+    
+    //make so another call does get made
+    value.updated = Date()
     
     do {
       //let theType = type(of: path)
       guard let info = try await sendGet(urlString) as? [String:Any] else { throw SignalKError.invalidServerResponse }
       guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
-      
+            
       let meta = info["meta"] as? [String: Any]
       value.info.updateMeta(meta)
       
       let values = info["values"] as? [String:[String:Any]]
 
       if value.source != nil && values != nil {
-        value.value = values?[source]?["value"]
+        setValue(value, value:values?[source]?["value"])
         
-        if let unSourced = get(path, source: nil) {
-          unSourced.value = value.value
+        if let unSourced : SKValueBase = getTyped(path, source: nil) {
+          setValue(unSourced, value:values?[source]?["value"])
+          unSourced.info.updateMeta(meta)
+          unSourced.setTimestamp(values?[source]?["timestamp"] as? String)
+        }
+        if let unSourced : SKValue<Any> = getAny(path, source: nil) {
+          setValue(unSourced, value:values?[source]?["value"])
           unSourced.info.updateMeta(meta)
           unSourced.setTimestamp(values?[source]?["timestamp"] as? String)
         }
       } else {
-        value.value = info["value"]
+        setValue(value, value: info["value"])
         value.source = source
         value.setTimestamp(info["timestamp"] as? String)
       }
       
       if values != nil {
         for (key, vmap) in values! {
-          if let v = get(path, source: key) {
-            v.value = vmap["value"]
+          if let v : SKValueBase = getTyped(path, source: key) {
+            setValue(v, value: vmap["value"])
+            v.info.updateMeta(meta)
+            v.setTimestamp(vmap["timestamp"] as? String)
+          }
+          if let v : SKValueBase = getAny(path, source: key) {
+            setValue(v, value: vmap["value"])
             v.info.updateMeta(meta)
             v.setTimestamp(vmap["timestamp"] as? String)
           }
@@ -99,15 +144,24 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
       }
       
       startTimer()
-      
+      return true
     } catch {
       //print(error)
     }
+    return false
   }
   
   //@MainActor
   private func updatePaths() async {
+    //FIXME: go through souce maps also
     for path in getValues().values {
+      do {
+        try await updatePath(path as! SKValueBase)
+      } catch {
+        //print(error)
+      }
+    }
+    for path in getAnyValues().values {
       do {
         try await updatePath(path)
       } catch {
@@ -127,9 +181,9 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
   }
   
   //@MainActor
-  override public func getObservableSelfPath(_ path: String, source: String? = nil) -> SKValue
+  override public func getObservableSelfPath<T>(_ path: String, source: String? = nil) -> SKValue<T>
   {
-    let value = getOrCreateValue(path, source: source)
+    let value : SKValue<T> = getOrCreateValue(path, source: source)
     
     Task {
       do {
@@ -139,33 +193,125 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
       }
     }
     
-    return value
+    return value as! SKValue<T>
   }
  
   //@MainActor
-  override public func getSelfPath(_ path: String, source: String? = nil) async throws -> SKValue
+  override public func getSelfPath<T>(_ path: String, source: String? = nil) async throws -> SKValue<T>
   {
-    let value = getOrCreateValue(path, source: source)
+    let value : SKValue<T> = getOrCreateValue(path, source: source)
     
-    try await updatePath(value)
+    try await updatePath(value as! SKValue<T>)
     
-    return value
+    return value as! SKValue<T>
+  }
+  
+  override public func getSelfPath<T>(_ path: String, source: String?, completion: @escaping (Bool, SKValueBase, Error?) -> Void) -> SKValue<T> {
+    let value : SKValue<T> = getOrCreateValue(path, source: source)
+    
+    //Task {
+    Task.detached { @MainActor in
+      do {
+        let updated = try await self.updatePath(value)
+        completion(updated, value, nil)
+      } catch {
+        completion(false, value, error)
+      }
+    }
+    
+    return value as! SKValue<T>
+  }
+  
+  func processResponse(_ res: [String:Any], completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void) {
+    guard let state = res["state"] as? String,
+          let statusCode = res["statusCode"] as? Int,
+          let requestId = res["requestId"] as? String
+    else {
+      completion(SignalKResponseState.failed, nil , res, SignalKError.invalidServerResponse)
+      return
+    }
+
+    let skState = SignalKResponseState(rawValue: state) ?? SignalKResponseState.failed
+    switch skState {
+    case .completed:
+      fallthrough
+    case .failed:
+      completion(skState, statusCode, res, nil)
+
+    default:
+      /*
+      guard let href = res["href"] as? String else {
+        completion(nil, nil , res, SignalKError.invalidServerResponse)
+        return
+      }
+       */
+      completion(skState, statusCode, res, nil)
+      
+      let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { timer in
+        Task {
+          do {
+            let res = try await self.sendGet("/actions/\(requestId)")
+            guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
+            self.processResponse(res, completion: completion)
+          } catch {
+            completion(SignalKResponseState.failed, nil, nil, error)
+          }
+        }
+      }
+    }
+  }
+  
+  override open func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void ) {
+    let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+    Task {
+      do {
+        let res = await try sendPut(urlString, data: ["value": value]) as! [String:Any]
+        guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
+        try processResponse(res, completion: completion)
+      } catch {
+        completion(SignalKResponseState.failed, nil, nil, error)
+      }
+    }
+  }
+  
+  override open func putSelfPath(path: String, value: Any?) async throws -> [String:Any] {
+    let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+    let res = await try sendPut(urlString, data: ["value": value]) as! [String:Any]
+    guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
+    return res
   }
 }
 
 @available(iOS 16, *)
-public enum SignalKError: Swift.Error, CustomLocalizedStringResourceConvertible {
+public enum SignalKError: LocalizedError {
   case invalidType
   case invalidServerResponse
+  case unauthorized
   case message(_ message: String)
   
-  @available(watchOS 9, *)
   public var localizedStringResource: LocalizedStringResource {
     switch self {
     case let .message(message): return "\(message)"
     case .invalidType: return "Invalid type"
-    case .invalidServerResponse: return "Invalid error response"
+    case .invalidServerResponse: return "Invalid server response"
+    case .unauthorized: return "Permission Denied"
     }
   }
+  
+  public var errorDescription: String? {
+    switch self {
+    case let .message(message): return "\(message)"
+    case .invalidType: return "Invalid type"
+    case .invalidServerResponse: return "Invalid server response"
+    case .unauthorized: return "Permission Denied"
+    }
+  }
+  
+}
+
+public enum SignalKResponseState: String {
+  case completed = "COMPLETED"
+  case failed = "FAILED"
+  case pending = "PENDING"
 }
 

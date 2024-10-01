@@ -14,8 +14,12 @@ private let cacheTimeout : TimeInterval = -30
 @available(iOS 17, *)
 public protocol SignalKServer : AnyObject
 {
-  func getObservableSelfPath(_ path: String, source: String?) -> SKValue
-  func getSelfPath(_ path: String, source: String?) async throws -> SKValue
+  func getObservableSelfPath<T>(_ path: String, source: String?) -> SKValue<T>
+  func getSelfPath<T>(_ path: String, source: String?) async throws -> SKValue<T>
+  func getSelfPath<T>(_ path: String, source: String?, completion: @escaping (Bool, SKValueBase, Error?) -> Void )  -> SKValue<T>
+  
+  func putSelfPath(path: String, value: Any?) async throws -> [String:Any]
+  func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void )
 }
 
 @available(iOS 17, *)
@@ -57,20 +61,19 @@ final public class SKPathInfo: NSObject, ObservableObject, @unchecked Sendable {
 }
 
 @available(iOS 17, *)
-final public class SKValue: NSObject, ObservableObject, @unchecked Sendable
+public class SKValueBase: NSObject, ObservableObject, @unchecked Sendable
 {
   @Published public var info: SKPathInfo
-  @Published public var value: Any?
   public var source: String?
   @Published public var timestamp: Date?
+  var updated: Date?
   
   public init(_ info: SKPathInfo) {
     self.info = info
   }
   
-  public init(_ info: SKPathInfo, value: Any?, source: String? = nil) {
+  init(_ info: SKPathInfo, source: String? = nil) {
     self.info = info
-    self.value = value
     self.source = source
   }
   
@@ -84,23 +87,7 @@ final public class SKValue: NSObject, ObservableObject, @unchecked Sendable
       }
     }
   }
-  
-  public func getMeasurement(_ type: UnitTypes? = nil) -> Measurement<Dimension>? {
-    guard let value = value else { return nil }
-    guard let number = value as? Double else { return nil }
-    if let units = info.units {
-      var measurement = Measurement(value: number, unit: units)
-      
-      if let conversion = preferedUnits(type) {
-        measurement = measurement.converted(to: conversion)
-      }
-      
-      return measurement
-    } else {
-      return nil
-    }
-  }
-  
+    
   public func preferedUnits(_ type:UnitTypes? = nil) -> Dimension? {
     var theType = type
     
@@ -125,21 +112,50 @@ final public class SKValue: NSObject, ObservableObject, @unchecked Sendable
     
     return nil
   }
-  
-  public func doubleValue() -> Double? {
-    return value as? Double
+}
+
+@available(iOS 17, *)
+final public class SKValue<T>: SKValueBase, @unchecked Sendable
+{
+  @Published public var value: T? {
+    didSet  {
+      updated = Date()
+    }
   }
   
-  public func intValue() -> Int? {
-    return value as? Int
+  public init(_ info: SKPathInfo, value: T? = nil, source: String? = nil) {
+    super.init(info, source: source)
+    if value != nil {
+      self.value = value
+    }
   }
-  
-  public func boolValue() -> Bool? {
-    return value as? Bool  == true || value as? Int == 1 || value as? String == "on"
+
+  public func getMeasurement(_ type: UnitTypes? = nil) -> Measurement<Dimension>? {
+    guard let value = value else { return nil }
+    guard let number = value as? Double else { return nil }
+    if let units = info.units {
+      var measurement = Measurement(value: number, unit: units)
+      
+      if let conversion = preferedUnits(type) {
+        measurement = measurement.converted(to: conversion)
+      }
+      
+      return measurement
+    } else {
+      return nil
+    }
   }
+}
+
+@available(iOS 17, *)
+final public class SKBool : NSObject, Sendable {
+  public var boolValue: Bool?
   
-  public func stringValue() -> String? {
-    return value as? String
+  init(_ value:Any?)
+  {
+    if let value {
+      boolValue = value as? Bool  == true || value as? Int == 1 || value as? String == "on"
+    }
   }
 }
 
