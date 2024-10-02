@@ -50,11 +50,12 @@ open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
     } else if let skvalue = base as? SKValue<Float> {
       skvalue.value = value as? Float
     } else if let skvalue = base as? SKValue<Any> {
+      /*
       if let val = value as? Bool {
         skvalue.value = SKBool(val)
-      } else {
+      } else { */
         skvalue.value = value
-      }
+      //}
     } else if let skvalue = base as? SKValue<Array<String>> {
       skvalue.value = value as? Array<String>
     } else {
@@ -106,7 +107,7 @@ open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
   }
 
   open func get<T>(_ path: String, source: String?) -> SKValue<T>? {
-    if T.Type.self == Any.self {
+    if T.self == Any.self {
       if let source {
         var sourceMap = anySources[source]
         if sourceMap == nil {
@@ -176,7 +177,7 @@ open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
        */
     } else {
       let value : SKValue<T> = SKValue<T>(SKPathInfo(path))
-      if T.Type.self == Any.self {
+      if T.self == Any.self {
         if let source {
           anySources[source]![path] = value as? SKValue<Any>
         } else {
