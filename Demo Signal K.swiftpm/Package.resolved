@@ -14,8 +14,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sbender9/WilhelmSKLibrary",
       "state" : {
-        "revision" : "0d082efdce01f689dc8ad6789f193650f0dbf911",
-        "version" : "1.0.2"
+        "revision" : "82d02dce13be6686b3cc370199e57351d9192cfb",
+        "version" : "1.0.3"
       }
     }
   ],
