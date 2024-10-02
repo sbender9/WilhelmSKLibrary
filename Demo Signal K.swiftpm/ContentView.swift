@@ -5,7 +5,7 @@ import WilhelmSKDummyGauges
 struct ContentView: View {
     let config: GaugeConfig
     
-    @ObservedObject var speed : SKValue
+    @ObservedObject var speed : SKValue<Double>
     let gradient = Gradient(colors: [.green, .yellow, .red])
     
     init(_ boat: SignalKBase, config: GaugeConfig, theme: Theme) {
@@ -13,10 +13,10 @@ struct ContentView: View {
         
         _speed = config.getObservableSelfPath(boat, path: config.signalKPath, source:nil)
     }
-
+    
     var body: some View {
         let measurement = speed.getMeasurement(.windSpeed)
-        let val = measurement?.value ?? speed.doubleValue() ?? 0
+        let val = measurement?.value ?? speed.value ?? 0
         
         VStack {
             Text(speed.info.displayName ?? config.title)

@@ -10,8 +10,8 @@
 		Ijoid2lsaGVsbXNrZHVtbXlnYXVnZXMiLCJsb2NhdGlvbiI6eyJyZW1vdGUi
 		Olt7InVybFN0cmluZyI6Imh0dHBzOlwvXC9naXRodWIuY29tXC9zYmVuZGVy
 		OVwvV2lsaGVsbVNLRHVtbXlHYXVnZXMifV19LCJwcm9kdWN0RmlsdGVyIjpu
-		dWxsLCJyZXF1aXJlbWVudCI6eyJyYW5nZSI6W3sibG93ZXJCb3VuZCI6IjAu
-		MC4xIiwidXBwZXJCb3VuZCI6IjEuMC4wIn1dfX1dfV0sImRpc3BsYXlOYW1l
+		dWxsLCJyZXF1aXJlbWVudCI6eyJyYW5nZSI6W3sibG93ZXJCb3VuZCI6IjEu
+		MC4wIiwidXBwZXJCb3VuZCI6IjIuMC4wIn1dfX1dfV0sImRpc3BsYXlOYW1l
 		IjoiU2lnbmFsSyBEZW1vIiwicGFja2FnZUtpbmQiOnsicm9vdCI6e319LCJw
 		bGF0Zm9ybXMiOlt7Im9wdGlvbnMiOltdLCJwbGF0Zm9ybU5hbWUiOiJpb3Mi
 		LCJ2ZXJzaW9uIjoiMTcuNSJ9XSwicHJvZHVjdHMiOlt7Im5hbWUiOiJTaWdu
@@ -51,7 +51,7 @@
 		</data>
 		<key>manifestHash</key>
 		<data>
-		6IbUPo9kAcJuKOjyaBjPjSLC1oVfLFKYaycTQ/lUHdY=
+		uEMaP3nAviAT4PDkV+4hmtEMSD7+/89o9YdsOcGEosE=
 		</data>
 		<key>schemaVersion</key>
 		<integer>4</integer>

@@ -148,7 +148,7 @@ final public class SKValue<T>: SKValueBase, @unchecked Sendable
 }
 
 @available(iOS 17, *)
-final public class SKBool : NSObject, Sendable {
+final public class SKBool : NSObject, @unchecked Sendable {
   public var boolValue: Bool?
   
   init(_ value:Any?)

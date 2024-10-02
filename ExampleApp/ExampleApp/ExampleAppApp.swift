@@ -22,7 +22,9 @@ let myUnitPrefs : [UnitTypes:Dimension] = [
   .energy: UnitEnergy.kilowattHours,
 ]
 
-let host = "https://demo.signalk.org"
+//let host = "https://demo.signalk.org"
+let host = "http://localhost:3000"
+
 
 let gaugeConfig = GaugeConfig(["signalKPath": "environment.wind.speedApparent", "title": "Wind Speed"])
 
@@ -35,7 +37,9 @@ struct ExampleAppApp: App {
 
   var body: some Scene {
     WindowGroup {
-      ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.theDefault())
+      //ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.theDefault())
+      StereoView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: Fusion([:]) , inWidget: false, completion: { (result, value, error) -> () in})
+
     }
   }
 }

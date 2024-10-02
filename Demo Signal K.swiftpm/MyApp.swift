@@ -28,7 +28,7 @@ struct MyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.defaultTheme())
+            ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.theDefault())
         }
     }
 }

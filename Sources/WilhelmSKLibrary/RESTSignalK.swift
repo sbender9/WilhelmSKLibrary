@@ -65,8 +65,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     
     let session = URLSession(configuration: .default)
-    let (data, resp) = try await session.data(for: request)
-    let status = (resp as! HTTPURLResponse).statusCode
+    let (data, _) = try await session.data(for: request)
     
     let dict = try JSONSerialization.jsonObject(with: data, options: [])
     
@@ -80,7 +79,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
   }
   
   @MainActor
-  func sendPut(_ urlString: String, data: Any?) async throws -> Any? {
+  func sendPut(_ urlString: String, data: Any) async throws -> Any? {
     guard JSONSerialization.isValidJSONObject(data) else { throw SignalKError.message("invalid put data") }
     let putData = try JSONSerialization.data(withJSONObject: data)
     return try await sendHttpRequestIgnoringStatus(urlString: urlString, method: "PUT", body: putData)
@@ -156,14 +155,14 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
     //FIXME: go through souce maps also
     for path in getValues().values {
       do {
-        try await updatePath(path as! SKValueBase)
+        let _ = try await updatePath(path)
       } catch {
         //print(error)
       }
     }
     for path in getAnyValues().values {
       do {
-        try await updatePath(path)
+        let _ = try await updatePath(path)
       } catch {
         //print(error)
       }
@@ -187,13 +186,13 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
     
     Task {
       do {
-        try await updatePath(value)
+        let _ = try await updatePath(value)
       } catch {
         print(error)
       }
     }
     
-    return value as! SKValue<T>
+    return value
   }
  
   //@MainActor
@@ -201,9 +200,9 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
   {
     let value : SKValue<T> = getOrCreateValue(path, source: source)
     
-    try await updatePath(value as! SKValue<T>)
+    let _ = try await updatePath(value)
     
-    return value as! SKValue<T>
+    return value
   }
   
   override public func getSelfPath<T>(_ path: String, source: String?, completion: @escaping (Bool, SKValueBase, Error?) -> Void) -> SKValue<T> {
@@ -219,7 +218,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
       }
     }
     
-    return value as! SKValue<T>
+    return value
   }
   
   func processResponse(_ res: [String:Any], completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void) {
@@ -247,7 +246,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
        */
       completion(skState, statusCode, res, nil)
       
-      let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { timer in
+      let _ = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { timer in
         Task {
           do {
             let res = try await self.sendGet("/actions/\(requestId)")
@@ -265,9 +264,8 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
     let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     Task {
       do {
-        let res = await try sendPut(urlString, data: ["value": value]) as! [String:Any]
-        guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
-        try processResponse(res, completion: completion)
+        let res = try await sendPut(urlString, data: ["value": value]) as! [String:Any]
+        processResponse(res, completion: completion)
       } catch {
         completion(SignalKResponseState.failed, nil, nil, error)
       }
@@ -276,9 +274,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
   
   override open func putSelfPath(path: String, value: Any?) async throws -> [String:Any] {
     let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
-    let res = await try sendPut(urlString, data: ["value": value]) as! [String:Any]
-    guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
-    return res
+    return try await sendPut(urlString, data: ["value": value]) as! [String:Any]
   }
 }
 

@@ -51,14 +51,14 @@ open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
       skvalue.value = value as? Float
     } else if let skvalue = base as? SKValue<Any> {
       if let val = value as? Bool {
-        skvalue.value = SKBool(value)
+        skvalue.value = SKBool(val)
       } else {
         skvalue.value = value
       }
     } else if let skvalue = base as? SKValue<Array<String>> {
       skvalue.value = value as? Array<String>
     } else {
-      print("invalid value \(value)")
+      print("invalid value \(String(describing: value))")
     }
   }
 
@@ -83,7 +83,7 @@ open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
   
   open func getTyped(_ path: String, source: String?) -> SKValueBase? {
     if let source {
-      var sourceMap = sources[source]
+      let sourceMap = sources[source]
       if sourceMap == nil {
         return nil
       }
@@ -95,13 +95,13 @@ open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
   
   open func getAny(_ path: String, source: String?) -> SKValue<Any>? {
     if let source {
-      var sourceMap = anySources[source]
+      let sourceMap = anySources[source]
       if sourceMap == nil {
         return nil
       }
-      return sourceMap![path] as? SKValue<Any>
+      return sourceMap![path]
     } else {
-      return anyValues[path] as? SKValue<Any>
+      return anyValues[path]
     }
   }
 
@@ -165,19 +165,22 @@ open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
   
   open func getOrCreateValue<T>(_ path: String, source: String? ) -> SKValue<T> {
     if let value : SKValue<T> = get(path, source: source) {
+      return value
+      /*
       if let value = value as? SKValue<T> {
         return value
       } else {
         //FIXME: type does not match??
         return SKValue<T>(SKPathInfo(path))
       }
+       */
     } else {
       let value : SKValue<T> = SKValue<T>(SKPathInfo(path))
       if T.Type.self == Any.self {
         if let source {
-          anySources[source]![path] = value as! SKValue<Any>
+          anySources[source]![path] = value as? SKValue<Any>
         } else {
-          anyValues[path] = value as! SKValue<Any>
+          anyValues[path] = value as? SKValue<Any>
         }
       } else {
         if let source {
@@ -186,7 +189,7 @@ open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
           values[path] = value
         }
       }
-      return value as! SKValue<T>
+      return value
     }
   }
 }
