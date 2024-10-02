@@ -23,7 +23,7 @@ public protocol SignalKServer : AnyObject
 }
 
 @available(iOS 17, *)
-final public class SKPathInfo: NSObject, ObservableObject, @unchecked Sendable {
+final public class SKPathInfo: NSObject, ObservableObject, Sendable {
   let id: String
   public let path: String
   @Published public private(set) var meta: [String: Any]?
@@ -61,7 +61,7 @@ final public class SKPathInfo: NSObject, ObservableObject, @unchecked Sendable {
 }
 
 @available(iOS 17, *)
-public class SKValueBase: NSObject, ObservableObject, @unchecked Sendable
+public class SKValueBase: NSObject, ObservableObject, Sendable
 {
   @Published public var info: SKPathInfo
   public var source: String?
@@ -115,7 +115,7 @@ public class SKValueBase: NSObject, ObservableObject, @unchecked Sendable
 }
 
 @available(iOS 17, *)
-final public class SKValue<T>: SKValueBase, @unchecked Sendable
+final public class SKValue<T>: SKValueBase, Sendable
 {
   @Published public var value: T? {
     didSet  {
@@ -148,7 +148,7 @@ final public class SKValue<T>: SKValueBase, @unchecked Sendable
 }
 
 @available(iOS 17, *)
-final public class SKBool : NSObject, @unchecked Sendable {
+final public class SKBool : NSObject, Sendable {
   public var boolValue: Bool?
   
   init(_ value:Any?)
