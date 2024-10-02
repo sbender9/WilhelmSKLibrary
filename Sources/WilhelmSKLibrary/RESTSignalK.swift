@@ -10,7 +10,7 @@ import Foundation
 import Combine
 
 @available(iOS 17, *)
-open class RESTSignalK : SignalKBase, @unchecked Sendable {
+open class RESTSignalK : SignalKBase {
   
   let restEndpoint: String
   let updateRate: Double

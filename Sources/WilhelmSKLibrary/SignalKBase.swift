@@ -8,7 +8,7 @@
 import Foundation
 
 @available(iOS 17, *)
-open class SignalKBase: NSObject, SignalKServer, @unchecked Sendable {
+open class SignalKBase: NSObject, SignalKServer {
   private var values : [String: SKValueBase] = [:]
   private var sources: [String: [String:SKValueBase]] = [:]
   

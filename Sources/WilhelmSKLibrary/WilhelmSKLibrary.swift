@@ -1,6 +1,7 @@
 import Foundation
 
-nonisolated(unsafe) private var unitPreferences : [UnitTypes:Dimension]?
+//nonisolated(unsafe)
+private var unitPreferences : [UnitTypes:Dimension]?
 
 
 @available(iOS 17, *)
