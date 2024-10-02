@@ -91,7 +91,7 @@ open class RESTSignalK : SignalKBase, @unchecked Sendable {
     let path = value.info.path
     let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     
-    if value.updated != nil && value.updated!.addingTimeInterval(cacheAge) > Date() {
+    if value.updated != nil && value.updated!.timeIntervalSinceNow > (cacheAge * -1) {
       return false
     }
     
