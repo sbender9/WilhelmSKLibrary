@@ -9,12 +9,27 @@ import Foundation
 
 @available(iOS 17, *)
 open class SignalKBase: NSObject, SignalKServer {
+  var connectionName: String?
   private var values : [String: SKValueBase] = [:]
   private var sources: [String: [String:SKValueBase]] = [:]
+  private var valueCacheLock = NSLock()
   
   private var anyValues: [String: SKValue<Any>] = [:]
   private var anySources: [String: [String:SKValue<Any>]] = [:]
+  private var anyCacheLock = NSLock()
 
+  public override init()
+  {
+  }
+  
+  public init(connectionName: String)
+  {
+    self.connectionName = connectionName
+  }
+  
+  open func getSelfPath<T>(_ path: String, source: String?, delegate: SessionDelegate) -> SKValue<T> {
+    return SKValue(SKPathInfo("dummy"))
+  }
   
   open func getObservableSelfPath<T>(_ path: String, source: String? = nil) -> SKValue<T> {
     return SKValue(SKPathInfo("dummy"))
@@ -59,75 +74,108 @@ open class SignalKBase: NSObject, SignalKServer {
     } else if let skvalue = base as? SKValue<Array<String>> {
       skvalue.value = value as? Array<String>
     } else {
-      print("invalid value \(String(describing: value))")
+      debug("invalid value \(String(describing: value))")
+    }
+  }
+  
+  func createValue(_ ofType: String, path: String) -> SKValueBase?
+  {
+    let info = SKPathInfo(path)
+    switch ofType {
+    case "SKBool": return SKValue<SKBool>(info)
+    case "Double": return SKValue<Double>(info)
+    case "String": return SKValue<String>(info)
+    case "Int": return SKValue<Int>(info)
+    case "Float": return SKValue<Float>(info)
+    case "Any": return SKValue<Any>(info)
+    case "Array<String>": return SKValue<Array<String>>(info)
+    default:
+      debug("could not create value of type \(ofType)")
+      return nil
     }
   }
 
   open func clearCache(_ path: String, source:String? = nil)
   {
-    if source != nil {
-      if let val = self.sources[source!]?[path] {
-        val.updated = nil
+    valueCacheLock.withLock {
+      if source != nil {
+        if let val = self.sources[source!]?[path] {
+          val.updated = nil
+        }
+      } else {
+        if let val = self.values[path] {
+          val.updated = nil
+        }
       }
-      if let val = self.anySources[source!]?[path] {
-        val.updated = nil
-      }
-    } else {
-      if let val = self.values[path] {
-        val.updated = nil
-      }
-      if let val = self.anyValues[path] {
-        val.updated = nil
+    }
+
+    anyCacheLock.withLock {
+      if source != nil {
+        if let val = self.anySources[source!]?[path] {
+          val.updated = nil
+        }
+      } else {
+        if let val = self.anyValues[path] {
+          val.updated = nil
+        }
       }
     }
   }
   
   open func getTyped(_ path: String, source: String?) -> SKValueBase? {
-    if let source {
-      let sourceMap = sources[source]
-      if sourceMap == nil {
-        return nil
+    valueCacheLock.withLock {
+      if let source {
+        let sourceMap = sources[source]
+        if sourceMap == nil {
+          return nil
+        }
+        return sourceMap![path]
+      } else {
+        return values[path]
       }
-      return sourceMap![path]
-    } else {
-      return values[path]
     }
   }
   
   open func getAny(_ path: String, source: String?) -> SKValue<Any>? {
-    if let source {
-      let sourceMap = anySources[source]
-      if sourceMap == nil {
-        return nil
+    anyCacheLock.withLock {
+      if let source {
+        let sourceMap = anySources[source]
+        if sourceMap == nil {
+          return nil
+        }
+        return sourceMap![path]
+      } else {
+        return anyValues[path]
       }
-      return sourceMap![path]
-    } else {
-      return anyValues[path]
     }
   }
 
   open func get<T>(_ path: String, source: String?) -> SKValue<T>? {
     if T.self == Any.self {
-      if let source {
-        var sourceMap = anySources[source]
-        if sourceMap == nil {
-          sourceMap = [:]
-          anySources[source] = sourceMap
+      anyCacheLock.withLock {
+        if let source {
+          var sourceMap = anySources[source]
+          if sourceMap == nil {
+            sourceMap = [:]
+            anySources[source] = sourceMap
+          }
+          return sourceMap![path] as? SKValue<T>
+        } else {
+          return anyValues[path] as? SKValue<T>
         }
-        return sourceMap![path] as? SKValue<T>
-      } else {
-        return anyValues[path] as? SKValue<T>
       }
     } else {
-      if let source {
-        var sourceMap = sources[source]
-        if sourceMap == nil {
-          sourceMap = [:]
-          sources[source] = sourceMap
+      valueCacheLock.withLock {
+        if let source {
+          var sourceMap = sources[source]
+          if sourceMap == nil {
+            sourceMap = [:]
+            sources[source] = sourceMap
+          }
+          return sourceMap![path] as? SKValue<T>
+        } else {
+          return values[path] as? SKValue<T>
         }
-        return sourceMap![path] as? SKValue<T>
-      } else {
-        return values[path] as? SKValue<T>
       }
     }
   }
@@ -163,6 +211,32 @@ open class SignalKBase: NSObject, SignalKServer {
     return anyValues
   }
 
+  func putValue(_ value: SKValueBase, path: String, source: String?)
+  {
+    if let value = value as? SKValue<Any> {
+      anyCacheLock.withLock {
+        if let source {
+          if anySources[source] == nil {
+            anySources[source] = [:]
+          }
+          anySources[source]![path] = value
+        } else {
+          anyValues[path] = value
+        }
+      }
+    } else {
+      valueCacheLock.withLock {
+        if let source {
+          if sources[source] == nil {
+            sources[source] = [:]
+          }
+          sources[source]![path] = value
+        } else {
+          values[path] = value
+        }
+      }
+    }
+  }
   
   open func getOrCreateValue<T>(_ path: String, source: String? ) -> SKValue<T> {
     if let value : SKValue<T> = get(path, source: source) {
@@ -178,16 +252,20 @@ open class SignalKBase: NSObject, SignalKServer {
     } else {
       let value : SKValue<T> = SKValue<T>(SKPathInfo(path))
       if T.self == Any.self {
-        if let source {
-          anySources[source]![path] = value as? SKValue<Any>
-        } else {
-          anyValues[path] = value as? SKValue<Any>
+        anyCacheLock.withLock {
+          if let source {
+            anySources[source]![path] = value as? SKValue<Any>
+          } else {
+            anyValues[path] = value as? SKValue<Any>
+          }
         }
       } else {
-        if let source {
-          sources[source]![path] = value
-        } else {
-          values[path] = value
+        valueCacheLock.withLock {
+          if let source {
+            sources[source]![path] = value
+          } else {
+            values[path] = value
+          }
         }
       }
       return value
