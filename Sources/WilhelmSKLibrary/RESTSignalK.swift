@@ -11,23 +11,45 @@ import Combine
 
 @available(iOS 17, *)
 open class RESTSignalK : SignalKBase {
+  let scheme: String, host: String, port: Int
   let restEndpoint: String
   let updateRate: Double
+  var token : String?
   public var cacheAge : TimeInterval = 1.0
   
   var timer: Timer?
-    
-  public init(host: String, updateRate: Double = 0 )
+  
+  public init(host: String, updateRate: Double = 0 ) throws
   {
-    self.restEndpoint = "\(host)/signalk/v1/api/"
+    guard let url = URL(string:host),
+          let host = url.host,
+          let scheme = url.scheme,
+          let port = url.port
+    else { throw SignalKError.invalidUrl }
+    
+    self.host = host
+    self.scheme = scheme
+    self.port = port
+    self.restEndpoint = "\(host)/signalk/v1/"
     self.updateRate = updateRate
     super.init()
   }
   
+  /*
   public init(restEndpoint: String, connectionName:String, updateRate: Double = 0 )
   {
     self.restEndpoint = restEndpoint
     self.updateRate = updateRate
+    super.init(connectionName: connectionName)
+  }*/
+  
+  public init(scheme: String, host: String, port: Int, connectionName: String, updateRate: Double = 0) {
+    self.restEndpoint = "\(scheme)://\(host):\(port)/signalk/v1/"
+    self.updateRate = updateRate
+    self.host = host
+    self.scheme = scheme
+    self.port = port
+    
     super.init(connectionName: connectionName)
   }
   
@@ -39,7 +61,7 @@ open class RESTSignalK : SignalKBase {
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     
     let sessionData = SessionCache.shared.get(for: sessionId, delegate: delegate)
-
+    
     debug("sending background request for \(url)")
     
     let task = sessionData.session.downloadTask(with:request)
@@ -47,7 +69,7 @@ open class RESTSignalK : SignalKBase {
     task.countOfBytesClientExpectsToReceive = 1024
     task.resume()
   }
-
+  
   
   //@MainActor
   func sendHttpRequest(urlString: String, method: String, body: Data?) async throws -> Any? {
@@ -57,9 +79,9 @@ open class RESTSignalK : SignalKBase {
     request.httpBody = body
     
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-    debug("sending GET request for \(url)")
-
+    
+    debug("sending \(method) request for \(url)")
+    
     let session = URLSession(configuration: .default)
     let (data, resp) = try await session.data(for:request)
     let status = (resp as! HTTPURLResponse).statusCode
@@ -104,16 +126,17 @@ open class RESTSignalK : SignalKBase {
     let putData = try JSONSerialization.data(withJSONObject: data)
     return try await sendHttpRequestIgnoringStatus(urlString: urlString, method: "PUT", body: putData)
   }
-
-        
+  
+  
   //@MainActor
   private func updateVaue(_ value: SKValueBase) async throws -> Bool {
-    let path = value.info.path
-    let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     
     if value.updated != nil && value.updated!.timeIntervalSinceNow > (cacheAge * -1) {
       return false
     }
+    
+    let path = value.info.path
+    let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     
     //make so another call does get made
     value.updated = Date()
@@ -121,9 +144,9 @@ open class RESTSignalK : SignalKBase {
     do {
       //let theType = type(of: path)
       guard let info = try await sendGet(urlString) as? [String:Any] else { throw SignalKError.invalidServerResponse }
-      guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
-            
-      setValueFromResponse(value, info: info, source: source)
+      //guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
+      
+      try setValueFromResponse(info: info, path: path)
       
       startTimer()
       return true
@@ -134,87 +157,40 @@ open class RESTSignalK : SignalKBase {
   }
   
   @MainActor
-  func setValueFromDownloadResponse(path: String, source: String, type: String, data: Data) throws -> SKValueBase?
+  func setValueFromDownloadResponse(path: String, source: String, type: String, data: Data) throws
   {
     let source = source == "nil" ? nil : source
-    
-    var value : SKValueBase?
-    if type == "Any" {
-      value = getAny(path, source: source)
-    } else {
-      value = getTyped(path, source: source)
-    }
-    
-    guard let value else { return nil } //it's gone! no worries
     
     guard let info = try JSONSerialization.jsonObject(with: data, options: []) as? [String:Any] else {
       throw SignalKError.invalidServerResponse
     }
-    guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
-
-    setValueFromResponse(value, info: info, source: source)
+    //guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
     
-    return value
+    try setValueFromResponse(info: info, path: path)
   }
   
-  func setValueFromResponse(_ value: SKValueBase, info: [String:Any], source: String )
+  func setValueFromResponse(info: [String:Any], path:String ) throws
   {
-    let path = value.info.path
+    //guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
     let meta = info["meta"] as? [String: Any]
-    value.info.updateMeta(meta)
     
-    let values = info["values"] as? [String:[String:Any]]
-    
-    if value.source != nil && values != nil {
-      setValue(value, value:values?[source]?["value"])
-      
-      if let unSourced : SKValueBase = getTyped(path, source: nil) {
-        setValue(unSourced, value:values?[source]?["value"])
-        unSourced.info.updateMeta(meta)
-        unSourced.setTimestamp(values?[source]?["timestamp"] as? String)
-      }
-      if let unSourced : SKValue<Any> = getAny(path, source: nil) {
-        setValue(unSourced, value:values?[source]?["value"])
-        unSourced.info.updateMeta(meta)
-        unSourced.setTimestamp(values?[source]?["timestamp"] as? String)
-      }
-    } else {
-      setValue(value, value: info["value"])
-      value.source = source
-      value.setTimestamp(info["timestamp"] as? String)
-    }
-    
-    if values != nil {
-      for (key, vmap) in values! {
-        if let v : SKValueBase = getTyped(path, source: key) {
-          setValue(v, value: vmap["value"])
-          v.info.updateMeta(meta)
-          v.setTimestamp(vmap["timestamp"] as? String)
-        }
-        if let v : SKValueBase = getAny(path, source: key) {
-          setValue(v, value: vmap["value"])
-          v.info.updateMeta(meta)
-          v.setTimestamp(vmap["timestamp"] as? String)
-        }
+    if let values = info["values"] as? [String:[String:Any]]  {
+      for (key, vmap) in values {
+        setSKValue(vmap["value"], path: path, source: key, timestamp: vmap["timestamp"] as? String, meta: meta)
       }
     }
+    setSKValue(info["value"], path: path, source: nil, timestamp: info["timestamp"] as? String, meta: meta)
   }
   
   //@MainActor
-  private func updatePaths() async {
-    //FIXME: go through souce maps also
-    for path in getValues().values {
+  private func updateValues() async {
+    let values = getUniqueCachedValues()
+
+    for value in getUniqueCachedValues().values {
       do {
-        let _ = try await updateVaue(path)
+        let _ = try await updateVaue(value)
       } catch {
         debug("error updatePath \(error)")
-      }
-    }
-    for path in getAnyValues().values {
-      do {
-        let _ = try await updateVaue(path)
-      } catch {
-        debug("error any updatePath \(error)")
       }
     }
   }
@@ -223,7 +199,7 @@ open class RESTSignalK : SignalKBase {
     if timer == nil && updateRate > 0 {
       timer = Timer.scheduledTimer(withTimeInterval: updateRate, repeats: true) { [self] timer in
         Task {
-          await updatePaths()
+          await updateValues()
         }
       }
     }
@@ -258,15 +234,15 @@ open class RESTSignalK : SignalKBase {
   override public func getSelfPath<T>(_ path: String, source: String?, delegate: SessionDelegate) -> SKValue<T> {
     let value : SKValue<T> = getOrCreateValue(path, source: source)
     
-    let path = value.info.path
-    let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
-    
     if value.updated != nil && value.updated!.timeIntervalSinceNow > (cacheAge * -1) {
       //FIME call delegate???
       debug("getSelfPath using cache for \(path)")
       return value
     }
-    
+
+    let path = value.info.path
+    let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+        
     //make so another call does get made
     value.updated = Date()
 
@@ -295,11 +271,13 @@ open class RESTSignalK : SignalKBase {
     return value
   }
   
-  func processResponse(_ res: [String:Any], completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void) {
+  func processResponse(_ res: [String:Any], path: String,
+                       completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void) {
     guard let state = res["state"] as? String,
           let statusCode = res["statusCode"] as? Int,
           let requestId = res["requestId"] as? String
     else {
+      clearCache(path)
       completion(SignalKResponseState.failed, nil , res, SignalKError.invalidServerResponse)
       return
     }
@@ -309,6 +287,7 @@ open class RESTSignalK : SignalKBase {
     case .completed:
       fallthrough
     case .failed:
+      clearCache(path)
       completion(skState, statusCode, res, nil)
 
     default:
@@ -318,15 +297,17 @@ open class RESTSignalK : SignalKBase {
         return
       }
        */
+      clearCache(path)
       completion(skState, statusCode, res, nil)
       
       let _ = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { timer in
         Task {
           do {
-            let res = try await self.sendGet("/actions/\(requestId)")
+            let res = try await self.sendGet("api/actions/\(requestId)")
             guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
-            self.processResponse(res, completion: completion)
+            self.processResponse(res, path: path, completion: completion)
           } catch {
+            self.clearCache(path)
             completion(SignalKResponseState.failed, nil, nil, error)
           }
         }
@@ -335,20 +316,40 @@ open class RESTSignalK : SignalKBase {
   }
   
   override open func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void ) {
-    let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+    let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     Task {
       do {
         let res = try await sendPut(urlString, data: ["value": value]) as! [String:Any]
-        processResponse(res, completion: completion)
+        processResponse(res, path:path, completion: completion)
       } catch {
         completion(SignalKResponseState.failed, nil, nil, error)
       }
     }
   }
   
+  open func getToken() -> String? {
+    return nil
+  }
+  
+  open func getLogin() -> (username: String, password: String)? {
+    return nil
+  }
+  
   override open func putSelfPath(path: String, value: Any?) async throws -> [String:Any] {
-    let urlString = "vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
-    return try await sendPut(urlString, data: ["value": value]) as! [String:Any]
+    let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+    let res = try await sendPut(urlString, data: ["value": value]) as! [String:Any]
+    clearCache(path)
+    return res
+  }
+  
+  open func login() async throws {
+    if let login = getLogin() {
+      let data = try JSONEncoder().encode(["username": login.username, "password": login.password])
+      
+      let res = try await sendHttpRequest(urlString: "auth/login", method: "POST", body: data) as? [String:Any]
+      
+      self.token = res?["token"] as? String
+    }
   }
 }
 
@@ -440,7 +441,7 @@ public class SessionCache {
  */
   
   public func remove(for id: String) {
-    lock.withLock {
+    let _ = lock.withLock {
       sessions.removeValue(forKey: id)
       //savePending()
     }
@@ -497,7 +498,7 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
     return nil
   }
   
-  open func valueUpdated(path: String, value: SKValueBase) {
+  open func valueUpdated(path: String) {
   }
   
   public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL)  {
@@ -534,9 +535,8 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
       }
       
       Task.detached { @MainActor in
-        if let value = try signalK.setValueFromDownloadResponse(path: path, source:source, type: type, data: data) {
-          self.valueUpdated(path: path, value: value)
-        }
+        try signalK.setValueFromDownloadResponse(path: path, source:source, type: type, data: data)
+        self.valueUpdated(path: path)
       }
     } catch {
       debug("Error updating value from session \(id) : \(error.localizedDescription)")
@@ -558,6 +558,7 @@ public enum SignalKError: LocalizedError {
   case invalidType
   case invalidServerResponse
   case unauthorized
+  case invalidUrl
   case message(_ message: String)
   
   public var localizedStringResource: LocalizedStringResource {
@@ -566,6 +567,7 @@ public enum SignalKError: LocalizedError {
     case .invalidType: return "Invalid type"
     case .invalidServerResponse: return "Invalid server response"
     case .unauthorized: return "Permission Denied"
+    case .invalidUrl: return "Invalid URL"
     }
   }
   
@@ -575,6 +577,7 @@ public enum SignalKError: LocalizedError {
     case .invalidType: return "Invalid type"
     case .invalidServerResponse: return "Invalid server response"
     case .unauthorized: return "Permission Denied"
+    case .invalidUrl: return "Invalid URL"
     }
   }
   

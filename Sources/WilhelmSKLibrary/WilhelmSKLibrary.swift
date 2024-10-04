@@ -31,18 +31,26 @@ public func getUnitPreferences() -> [UnitTypes:Dimension]?
   return unitPreferences
 }
 
+@available(iOS 17, *)
+public func castAnyValue<T>(_ from: SKValue<Any>) -> SKValue<T> {
+  let res = SKValue<T>(from.info)
+  res.value = from.value as? T
+  return res
+}
+
+
 @available(iOS 14, *)
 private let logger = Logger(OSLog.debug)
 
 public func debug(_ message:String)
 {
-  var subsystem = Bundle.main.bundleIdentifier!
-  
-  if #available (iOS 14, *) {
-    logger.log("WilhelmSKLib.debug: \(message)")
+//#if DEBUG
+    if #available (iOS 14, *) {
+    logger.log("WilhelmSKD.network: \(message)")
   } else {
-    print("WilhelmSKLib.debug: \(message)")
+    print("WilhelmSKD.network: \(message)")
   }
+//#endif
 }
 
 import os.log
@@ -51,5 +59,5 @@ extension OSLog {
   private static var subsystem = Bundle.main.bundleIdentifier!
   
   /// Logs the view cycles like viewDidLoad.
-  static let debug = OSLog(subsystem: subsystem, category: "debug")
+  static let debug = OSLog(subsystem: subsystem, category: "network")
 }

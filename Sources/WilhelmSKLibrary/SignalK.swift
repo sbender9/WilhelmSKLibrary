@@ -16,13 +16,12 @@ public protocol SignalKServer : AnyObject
 {
   func getObservableSelfPath<T>(_ path: String, source: String?) -> SKValue<T>
   func getSelfPath<T>(_ path: String, source: String?) async throws -> SKValue<T>
-  func getSelfPath<T>(_ path: String, source: String?, completion: @escaping (Bool, SKValueBase, Error?) -> Void )  -> SKValue<T>
+  //func getSelfPath<T>(_ path: String, source: String?, completion: @escaping (Bool, SKValueBase, Error?) -> Void )  -> SKValue<T>
   
   func getSelfPath<T>(_ path: String, source: String?, delegate: SessionDelegate) -> SKValue<T>
   
   func putSelfPath(path: String, value: Any?) async throws -> [String:Any]
-  func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void )
-  
+  //func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void )
 }
 
 @available(iOS 17, *)
@@ -157,7 +156,7 @@ final public class SKBool : NSObject, Sendable {
   public init(_ value:Any?)
   {
     if let value {
-      boolValue = value as? Bool  == true || value as? Int == 1 || value as? String == "on"
+      boolValue = (value as? SKBool)?.boolValue == true || value as? Bool  == true || value as? Int == 1 || value as? String == "on"
     }
   }
 }
