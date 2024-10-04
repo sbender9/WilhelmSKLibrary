@@ -58,6 +58,8 @@ open class RESTSignalK : SignalKBase {
     
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+    debug("sending GET request for \(url)")
+
     let session = URLSession(configuration: .default)
     let (data, resp) = try await session.data(for:request)
     let status = (resp as! HTTPURLResponse).statusCode
@@ -67,6 +69,8 @@ open class RESTSignalK : SignalKBase {
     //debug(String(data: data, encoding: .utf8))
     
     let dict = try JSONSerialization.jsonObject(with: data, options: [])
+    
+    //debug("reposonse from GET request: \(dict)")
     
     return dict
   }
@@ -259,7 +263,7 @@ open class RESTSignalK : SignalKBase {
     
     if value.updated != nil && value.updated!.timeIntervalSinceNow > (cacheAge * -1) {
       //FIME call delegate???
-      //debug("getSelfPath using cache for \(path)")
+      debug("getSelfPath using cache for \(path)")
       return value
     }
     
@@ -386,6 +390,7 @@ public class SessionCache {
     self.sessionDelegateCreator = creator
   }
   
+/*
   func savePending()
   {
     if sessions.count == 0 {
@@ -414,7 +419,7 @@ public class SessionCache {
         debug("invalid session id '\(id)'")
         continue
       }
-      debug("creating session for \(id)")
+      debug("creating pending session for \(id)")
       let delegate = sessionDelegateCreator(info.kind)
       do {
         let signalK = try delegate.getSignalK(connection: info.connection) as? RESTSignalK
@@ -432,11 +437,12 @@ public class SessionCache {
       }
     }
   }
+ */
   
   public func remove(for id: String) {
     lock.withLock {
       sessions.removeValue(forKey: id)
-      savePending()
+      //savePending()
     }
   }
   
@@ -450,6 +456,8 @@ public class SessionCache {
     lock.withLock {
       if let session = sessions[id] { return session }
       
+      debug("create session for \(id)")
+      
       let session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: id)
         config.isDiscretionary = false
@@ -458,7 +466,7 @@ public class SessionCache {
       }()
       let data = SessionData(session: session)
       sessions[id] = data
-      savePending()
+      //savePending()
       return data
     }
   }
