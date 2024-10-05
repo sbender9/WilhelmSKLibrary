@@ -68,7 +68,8 @@ public class SKValueBase: NSObject, ObservableObject, Sendable
   @Published public var info: SKPathInfo
   public var source: String?
   @Published public var timestamp: Date?
-  var updated: Date?
+  @Published public var updated: Date?
+  var cached: Date?
   
   public init(_ info: SKPathInfo) {
     self.info = info
