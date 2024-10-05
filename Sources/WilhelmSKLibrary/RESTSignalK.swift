@@ -53,6 +53,10 @@ open class RESTSignalK : SignalKBase {
     super.init(connectionName: connectionName)
   }
   
+  open func hasToken() -> Bool {
+    return token != nil
+  }
+  
   func sendBackgroundGetHttpRequest(urlString: String, forPath: String, sessionId: String, delegate: URLSessionDelegate)  {
     guard let url = URL(string: "\(restEndpoint)\(urlString)") else { return }
     var request = URLRequest(url: url)
