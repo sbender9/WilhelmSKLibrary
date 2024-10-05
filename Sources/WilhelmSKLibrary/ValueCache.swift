@@ -153,23 +153,25 @@ class ValueTypeCache<T> {
   {
     lock.withLock {
       if let source = source {
-        if var sourceMap = sources[source],
+        if let sourceMap = sources[source],
            let value = sourceMap[path] {
-          value.updated = nil
+          value.cached = nil
         }
       } else {
-        for var sourceMap in sources.values {
-          sourceMap[path]?.updated = nil
+        for sourceMap in sources.values {
+          sourceMap[path]?.cached = nil
         }
       }
-      cache[path]?.updated = nil
+      cache[path]?.cached = nil
     }
   }
   
   func getPaths(_ paths: inout [String:SKValueBase]) {
     for sourceMap in sources.values {
       for value in sourceMap.values {
-        paths[value.info.path, default: { value }()]
+        if paths[value.info.path] == nil {
+          paths[value.info.path] = value
+        }
       }
     }
   }
