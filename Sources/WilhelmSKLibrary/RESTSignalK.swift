@@ -135,7 +135,7 @@ open class RESTSignalK : SignalKBase {
   //@MainActor
   private func updateVaue(_ value: SKValueBase) async throws -> Bool {
     
-    if value.updated != nil && value.updated!.timeIntervalSinceNow > (cacheAge * -1) {
+    if value.cached != nil && value.cached!.timeIntervalSinceNow > (cacheAge * -1) {
       return false
     }
     
@@ -143,7 +143,7 @@ open class RESTSignalK : SignalKBase {
     let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     
     //make so another call does get made
-    value.updated = Date()
+    value.cached = Date()
     
     do {
       //let theType = type(of: path)
@@ -163,7 +163,7 @@ open class RESTSignalK : SignalKBase {
   @MainActor
   func setValueFromDownloadResponse(path: String, source: String, type: String, data: Data) throws
   {
-    let source = source == "nil" ? nil : source
+    //let source = source == "nil" ? nil : source
     
     guard let info = try JSONSerialization.jsonObject(with: data, options: []) as? [String:Any] else {
       throw SignalKError.invalidServerResponse
@@ -188,8 +188,6 @@ open class RESTSignalK : SignalKBase {
   
   //@MainActor
   private func updateValues() async {
-    let values = getUniqueCachedValues()
-
     for value in getUniqueCachedValues().values {
       do {
         let _ = try await updateVaue(value)
@@ -238,7 +236,7 @@ open class RESTSignalK : SignalKBase {
   override public func getSelfPath<T>(_ path: String, source: String?, delegate: SessionDelegate) -> SKValue<T> {
     let value : SKValue<T> = getOrCreateValue(path, source: source)
     
-    if value.updated != nil && value.updated!.timeIntervalSinceNow > (cacheAge * -1) {
+    if value.cached != nil && value.cached!.timeIntervalSinceNow > (cacheAge * -1) {
       //FIME call delegate???
       debug("getSelfPath using cache for \(path)")
       return value
@@ -248,7 +246,7 @@ open class RESTSignalK : SignalKBase {
     let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
         
     //make so another call does get made
-    value.updated = Date()
+    value.cached = Date()
 
     let type : String  = String(describing: T.self)
     let sessionId = "\(self.connectionName!)/\(path)/\(source ?? "nil")/\(type)/\(delegate.kind)"
@@ -484,7 +482,7 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
   public var completion: (() -> Void)?
   
   public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-    debug("urlSessionDidFinishEvents '\(session.configuration.identifier)")
+    debug("urlSessionDidFinishEvents '\(session.configuration.identifier!)")
     guard let completion = completion else {
       debug ("no cometion handler")
       return
@@ -506,11 +504,11 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
   }
   
   public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL)  {
-    debug("didFinishDownloadingTo '\(session.configuration.identifier! ?? "unknown")")
+    debug("didFinishDownloadingTo '\(session.configuration.identifier!)")
 
     guard let id = session.configuration.identifier else { return }
     
-    let data = try FileManager.default.contents(atPath: location.path)
+    let data = FileManager.default.contents(atPath: location.path)
     
     guard let data else {
       debug("could not read data for session id \(id)")
@@ -548,11 +546,8 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
   }
   
   public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-    debug("didCompleteWithError '\(session.configuration.identifier! ?? "unknown") \(error)")
+    debug("didCompleteWithError '\(session.configuration.identifier!) Error: \(String(describing: error))")
     SessionCache.shared.remove(for: session.configuration.identifier!)
-    if error != nil {
-      debug("Error for session \(session.configuration.identifier) : \(error?.localizedDescription)")
-    }
   }
   
 }
