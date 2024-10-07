@@ -9,7 +9,7 @@ import Foundation
 
 @available(iOS 17, *)
 open class SignalKBase: NSObject, SignalKServer {
-  var connectionName: String?
+  open var connectionName: String?
   let cache = ValueCache()
 
   public override init()
@@ -21,7 +21,7 @@ open class SignalKBase: NSObject, SignalKServer {
     self.connectionName = connectionName
   }
   
-  open func getSelfPath<T>(_ path: String, source: String?, delegate: SessionDelegate) -> SKValue<T> {
+  open func getSelfPath<T>(_ path: String, source: String?, uuid: String, delegate: SessionDelegate) -> SKValue<T> {
     return SKValue(SKPathInfo("dummy"))
   }
   
@@ -33,7 +33,7 @@ open class SignalKBase: NSObject, SignalKServer {
     return SKValue(SKPathInfo("dummy"))
   }
   
-  open func getSelfPaths(_ paths: [PathRequest], delegate: SessionDelegate) -> [String:SKValueBase]
+  open func getSelfPaths(_ paths: [PathRequest], uuid: String, delegate: SessionDelegate) -> [String:SKValueBase]
   {
     return ["dummy": SKValueBase(SKPathInfo("dummy"))]
   }

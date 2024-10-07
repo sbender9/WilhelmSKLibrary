@@ -18,14 +18,14 @@ public protocol SignalKServer : AnyObject
   func getSelfPath<T>(_ path: String, source: String?) async throws -> SKValue<T>
   //func getSelfPath<T>(_ path: String, source: String?, completion: @escaping (Bool, SKValueBase, Error?) -> Void )  -> SKValue<T>
   
-  func getSelfPath<T>(_ path: String, source: String?, delegate: SessionDelegate) -> SKValue<T>
-  func getSelfPaths(_ paths: [PathRequest], delegate: SessionDelegate) -> [String:SKValueBase]
+  func getSelfPath<T>(_ path: String, source: String?, uuid: String, delegate: SessionDelegate) -> SKValue<T>
+  func getSelfPaths(_ paths: [PathRequest], uuid: String, delegate: SessionDelegate) -> [String:SKValueBase]
   
   func putSelfPath(path: String, value: Any?) async throws -> [String:Any]
   //func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void )
 }
 
-public struct PathRequest: Codable {
+public struct PathRequest: Codable, Sendable {
   let path: String
   let type: String
   let source: String?

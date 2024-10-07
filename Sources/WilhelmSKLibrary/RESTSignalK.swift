@@ -16,6 +16,7 @@ open class RESTSignalK : SignalKBase {
   let updateRate: Double
   var token : String?
   public var cacheAge : TimeInterval = 1.0
+  //private var tasks : [URLSessionDownloadTask] = []
   
   var timer: Timer?
   
@@ -63,12 +64,13 @@ open class RESTSignalK : SignalKBase {
     
     let sessionData = SessionCache.shared.get(for: sessionId, delegate: delegate)
     
-    debug("sending background request for \(url)")
+    debug("sending background \(method) request for \(url)")
     
     let task = sessionData.session.downloadTask(with:request)
-    task.countOfBytesClientExpectsToSend = 0
-    task.countOfBytesClientExpectsToReceive = 1024
+    //task.countOfBytesClientExpectsToSend = 0
+    //task.countOfBytesClientExpectsToReceive = 1024
     task.resume()
+    //tasks.append(task)
   }
   
   
@@ -232,45 +234,17 @@ open class RESTSignalK : SignalKBase {
     return value
   }
   
-  override public func getSelfPath<T>(_ path: String, source: String?, delegate: SessionDelegate) -> SKValue<T> {
+  override public func getSelfPath<T>(_ path: String, source: String?, uuid: String, delegate: SessionDelegate) -> SKValue<T> {
     
     let req = PathRequest(path: path, type: String(describing: T.self), source: source)
-    let res = getSelfPaths([req], delegate: delegate)
+    let res = getSelfPaths([req], uuid: uuid, delegate: delegate)
     return res[path] as! SKValue<T> //FIXME, check??
-    
-    /*
-    let value : SKValue<T> = getOrCreateValue(path, source: source)
-    
-    if value.cached != nil && value.cached!.timeIntervalSinceNow > (cacheAge * -1) {
-      //FIME call delegate???
-      debug("getSelfPath using cache for \(path)")
-      return value
-    }
-
-    let path = value.info.path
-    let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
-        
-    //make so another call does get made
-    value.cached = Date()
-
-    let type : String  = String(describing: T.self)
-    let paths = "[{\"path\":\"\(path)\",\"type\":\"\(type)\"\(source != nil ? ",\"source\":\"\(source)\"" : "")}]"
-    let sessionId = "\(self.connectionName!)/\(paths)/\(delegate.kind)"
-    
-    do {
-      try sendBackgroundHttpRequest(urlString: urlString, method:"GET", body:nil, sessionId: sessionId, delegate: delegate)
-    } catch {
-      debug("getSelfPath error: \(error)")
-    }
-    
-    return value
-     */
   }
   
-  override public func getSelfPaths(_ paths: [PathRequest], delegate: SessionDelegate) -> [String:SKValueBase]
+  override public func getSelfPaths(_ paths: [PathRequest], uuid: String, delegate: SessionDelegate) -> [String:SKValueBase]
   {
     var result : [String:SKValueBase] = [:]
-    var needed : [[String:String?]] = []
+    var needed : [PathRequest]
 
     needed = paths.compactMap { pr in
       var value = cache.get(pr.path, source: pr.source, type: pr.type)
@@ -289,22 +263,30 @@ open class RESTSignalK : SignalKBase {
           return nil
         } else {
           value.cached = Date()
-          var res =  ["path": pr.path, "type": pr.type]
-          if let source = pr.source { res["source"] = source }
-          return res
+          return pr
         }
       }
 
       return nil
     }
+    
+    delegate.signalK = self
+    delegate.paths = paths
 
     if needed.count > 0 {
       do {
         let urlString = "api/wsk/paths"
         let data = try JSONEncoder().encode(needed)
-        let sessionId = "\(self.connectionName!)/\(String(data: data, encoding: .utf8)!)/\(delegate.kind)"
         
-        try sendBackgroundHttpRequest(urlString: urlString, method:"POST", body:needed, sessionId: sessionId, delegate: delegate)
+        var post : [[String:String?]] = needed.map { pr in
+          var res =  ["path": pr.path, "type": pr.type]
+          if let source = pr.source {
+            res["source"] = source
+          }
+          return res
+        }
+        
+        try sendBackgroundHttpRequest(urlString: urlString, method:"POST", body:post, sessionId: uuid, delegate: delegate)
       } catch {
         debug("getSelfPaths error: \(error)")
       }
@@ -415,10 +397,11 @@ open class RESTSignalK : SignalKBase {
 @available(iOS 17, *)
 public struct SessionData {
   public var session : URLSession
+  public var delegate: URLSessionDelegate
 }
 
 private let defaultsSuiteName = "group.com.scottbender.wilhelm"
-private let pendingKey = "pendingSessions"
+private let pendingKey = "pendingSessionsV2"
 
 private func parseSessionId(_ id: String) -> (connection: String, paths: [[String:String]], kind: String)?
 {
@@ -452,13 +435,6 @@ public class SessionCache {
   private var restoredSessions : [String: SessionData] = [:]
   private var lock = NSLock()
   private let defaults = UserDefaults(suiteName: defaultsSuiteName)
-  private var sessionDelegateCreator: ((_ kind:String) -> SessionDelegate)?
-
-  
-  public func setSessionDelegateCreator(_ creator: @escaping ((_ kind:String) -> SessionDelegate))
-  {
-    self.sessionDelegateCreator = creator
-  }
   
   func savePending()
   {
@@ -472,35 +448,44 @@ public class SessionCache {
     }
   }
   
-  public func loadPendingSessions()
+  public func getPendingSessions() -> [String]
+  {
+    guard let pending : [String] = defaults?.array(forKey: pendingKey) as? [String] else {
+      return []
+    }
+    return pending
+  }
+  
+  public func loadPendingSessions(delegates: [String: SessionDelegate])
   {
     debug("loading pending session")
-    guard let sessionDelegateCreator = sessionDelegateCreator else {
-      debug("no session delegate creator")
-      return
-    }
     guard let pending : [String] = defaults?.array(forKey: pendingKey) as? [String] else {
       debug("No pending sessions")
       return
     }
     for id in pending {
-      guard let info = parseSessionId(id) else {
-        debug("invalid session id '\(id)'")
+      debug("creating pending session for \(id)")
+      guard let delegate = delegates[id] else {
+        debug("no delegate for session id \(id)")
         continue
       }
-      debug("creating pending session for \(id)")
-      let delegate = sessionDelegateCreator(info.kind)
       do {
-        let signalK = try delegate.getSignalK(connection: info.connection) as? RESTSignalK
+        //let signalK = try delegate.getSignalK(connection: info.connection) as? RESTSignalK
         
-        guard let signalK else {
+        guard let signalK = delegate.signalK else {
           debug("could not get connection for session id \(id)")
           return
         }
-        for pi in info.paths {
-          if let value = signalK.createValue(pi["type"]!, path:pi["path"]! ) {
+        
+        guard let paths = delegate.paths else {
+          debug("no paths for session id \(id)")
+          return
+        }
+        
+        for pi in paths {
+          if let value = signalK.createValue(pi.type, path:pi.path ) {
             //signalK.setSKValue(value, path: info.path, source: info.source)
-            signalK.setSKValue(value, path: pi["path"]!, source: pi["source"], timestamp: nil, meta: nil)
+            signalK.setSKValue(value, path: pi.path, source: pi.source, timestamp: nil, meta: nil)
             value.cached = Date()
           }
         }
@@ -508,10 +493,10 @@ public class SessionCache {
         let session: URLSession = {
           let config = URLSessionConfiguration.background(withIdentifier: id)
           config.isDiscretionary = false
-          config.sessionSendsLaunchEvents = false
+          config.sessionSendsLaunchEvents = true
           return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
         }()
-        let data = SessionData(session: session)
+        let data = SessionData(session: session, delegate: delegate)
         restoredSessions[id] = data
       } catch {
         debug("error loading session: \(error.localizedDescription)")
@@ -550,10 +535,10 @@ public class SessionCache {
     let session: URLSession = {
       let config = URLSessionConfiguration.background(withIdentifier: id)
       config.isDiscretionary = false
-      config.sessionSendsLaunchEvents = false
+      config.sessionSendsLaunchEvents = true
       return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
     }()
-    let data = SessionData(session: session)
+    let data = SessionData(session: session, delegate: delegate)
     sessions[id] = data
     savePending()
     lock.unlock()
@@ -563,7 +548,8 @@ public class SessionCache {
 
 @available(iOS 17, *)
 open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDelegate {
-  public let kind : String
+  public var signalK: RESTSignalK? = nil
+  public var paths: [PathRequest]? = nil
   
   public var completion: (() -> Void)?
   
@@ -577,16 +563,8 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
       completion()
     }
   }
-  
-  public init(kind: String) {
-    self.kind = kind
-  }
-  
-  open func getSignalK(connection:String) throws -> SignalKServer? {
-    return nil
-  }
-  
-  open func valueUpdated() {
+
+  open func valueUpdated(sessionId: String) {
   }
   
   public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL)  {
@@ -601,37 +579,42 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
       return
     }
     
-
+    /*
     //let sessionId = "\(self.connectionName)/\(path)/\(type)"
     guard let info = parseSessionId(id) else {
       debug("invalid session id '\(id)'")
       return
     }
+     */
 
     do {
-      let signalK = try getSignalK(connection: info.connection) as? RESTSignalK
-      
-      guard let signalK else {
-        debug("could not get connection for session id \(id)")
-        return
-      }
-      
-      guard let dict : [String:[String:Any]] = try JSONSerialization.jsonObject(with: data, options: []) as? [String:[String:Any]]
-      else {
-        debug("could not decode response \(id)")
-        return
-      }
-      
       Task.detached { @MainActor in
-        for pi in info.paths {
-          let path =  pi["path"]!
+                
+        guard let signalK = self.signalK else {
+          debug("could not get connection for session id \(id)")
+          return
+        }
+        
+        guard let paths = self.paths else {
+          debug("could not get paths for session id \(id)")
+          return
+        }
+        
+        guard let dict : [String:[String:Any]] = try JSONSerialization.jsonObject(with: data, options: []) as? [String:[String:Any]]
+        else {
+          debug("could not decode response \(id)")
+          return
+        }
+        
+        for pi in paths {
+          let path =  pi.path
           if let value = dict[path] as? [String:Any] {
-            try signalK.setValueFromDownloadResponse(path: path, source:pi["source"], type: pi["type"]!, info: value)
+            try signalK.setValueFromDownloadResponse(path: path, source:pi.source, type: pi.type, info: value)
           } else {
             debug("invalid value \(id)")
           }
         }
-        self.valueUpdated()
+        self.valueUpdated(sessionId: id)
       }
     } catch {
       debug("Error updating value from session \(id) : \(error.localizedDescription)")

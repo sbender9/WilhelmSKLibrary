@@ -20,7 +20,6 @@ class ValueCache {
     caches["Double"] = ValueTypeCache<Double>()
     caches["String"] = ValueTypeCache<String>()
     caches["Any"] = ValueTypeCache<Any>()
-    caches["String"] = ValueTypeCache<Array<String>>()
     caches["Array<String>"] = ValueTypeCache<Array<String>>()
   }
   
@@ -140,7 +139,7 @@ class ValueTypeCache<T> {
   
   func get(_ path: String, source: String? = nil, create: Bool = false) -> SKValue<T>? {
     lock.lock()
-    debug("ValueTypeCache<\(T.self)> get for \(path) create: \(create)")
+    //debug("ValueTypeCache<\(T.self)> get for \(path) create: \(create)")
     if let source = source {
       var sourceMap = sources[source, default: [:]]
       var value = sourceMap[path]
@@ -161,7 +160,7 @@ class ValueTypeCache<T> {
   
   func get(_ path: String, source: String? = nil) -> SKValueBase? {
     lock.lock()
-    debug("ValueTypeCache<\(T.self)> get for \(path)")
+    //debug("ValueTypeCache<\(T.self)> get for \(path)")
     if let source = source {
       var sourceMap = sources[source, default: [:]]
       lock.unlock()
@@ -176,7 +175,7 @@ class ValueTypeCache<T> {
     lock.lock()
     if let source = source {
       if let skvalue = self.sources[source]?[path] { //FIXME, implement
-        debug("ValueTypeCache<\(T.self)> put \(value) for \(path)")
+        //debug("ValueTypeCache<\(T.self)> put \(value) for \(path)")
         //skvalue.value = val as? T
         //skvalue.setTimestamp(timestamp)
         //skvalue.info.updateMeta(meta)
@@ -185,7 +184,7 @@ class ValueTypeCache<T> {
       }
     } else {
       if let value = value as? SKValue<T> { //FIXME: error??
-        debug("ValueTypeCache<\(T.self)> put \(value) for \(path)")
+        //debug("ValueTypeCache<\(T.self)> put \(value) for \(path)")
         self.cache[path] = value
       } else {
         debug("ValueTypeCache<\(T.self)> attempt to put a \(value)")
@@ -212,8 +211,8 @@ class ValueTypeCache<T> {
         skvalue.info.updateMeta(meta)
       }
     } else {
-      if let skvalue = self.cache[path] { //FIXME: crash!!
-          debug("ValueTypeCache<\(T.self)> setting \(value) for \(path)")
+      if let skvalue = self.cache[path] {
+        debug("ValueTypeCache<\(T.self)> setting \(value) for \(path)")
         skvalue.value = val as? T
         skvalue.setTimestamp(timestamp)
         skvalue.info.updateMeta(meta)
