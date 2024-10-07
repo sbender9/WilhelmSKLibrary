@@ -41,15 +41,14 @@ public struct PathRequest: Codable, Sendable {
 final public class SKPathInfo: NSObject, ObservableObject, Sendable {
   let id: String
   public let path: String
-  @Published public private(set) var meta: [String: Any]?
+  @Published private var meta: JSONDictionary?
   @Published public var displayName: String?
-  //@Published public private(set) var units: String?
   public private(set) var units: Dimension?
   
   public init(_ path: String, meta: [String : Any]? = nil) {
     self.id = path
     self.path = path
-    self.meta = meta
+    self.meta = getJSONObject(from: meta) as? JSONDictionary
     if let units = meta?["units"] as? String {
       self.units = skToSwiftUnits[units]
     }
@@ -66,8 +65,12 @@ final public class SKPathInfo: NSObject, ObservableObject, Sendable {
     self.displayName = meta?["displayName"] as? String
   }
   
+  public func getMeta<T>(_ key: String) -> T? {
+    return meta?.dictionary[key]?.value as? T
+  }
+  
   public func updateMeta(_ meta: [String: Any]?) {
-    self.meta = meta
+    self.meta = getJSONObject(from: meta) as? JSONDictionary
     if let units = meta?["units"] as? String {
       self.units = skToSwiftUnits[units]
     }
