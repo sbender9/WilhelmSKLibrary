@@ -19,20 +19,14 @@ open class RESTSignalK : SignalKBase {
   
   var timer: Timer?
   
-  public init(host: String, updateRate: Double = 0 ) throws
+  public convenience init(host: String, updateRate: Double = 0 ) throws
   {
     guard let url = URL(string:host),
           let host = url.host,
           let scheme = url.scheme,
           let port = url.port
     else { throw SignalKError.invalidUrl }
-    
-    self.host = host
-    self.scheme = scheme
-    self.port = port
-    self.restEndpoint = "\(host)/signalk/v1/"
-    self.updateRate = updateRate
-    super.init()
+    self.init(scheme:scheme, host: host, port: port, connectionName: "none", updateRate: updateRate)
   }
   
   /*
@@ -57,10 +51,13 @@ open class RESTSignalK : SignalKBase {
     return token != nil
   }
   
-  func sendBackgroundGetHttpRequest(urlString: String, forPath: String, sessionId: String, delegate: URLSessionDelegate)  {
+  func sendBackgroundHttpRequest(urlString: String, method: String, body:Any?, sessionId: String, delegate: URLSessionDelegate) throws {
     guard let url = URL(string: "\(restEndpoint)\(urlString)") else { return }
     var request = URLRequest(url: url)
-    request.httpMethod = "GET"
+    request.httpMethod = method
+    if let body = body {
+      request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    }
     
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     
@@ -132,7 +129,7 @@ open class RESTSignalK : SignalKBase {
   }
   
   
-  //@MainActor
+  @MainActor
   private func updateVaue(_ value: SKValueBase) async throws -> Bool {
     
     if value.cached != nil && value.cached!.timeIntervalSinceNow > (cacheAge * -1) {
@@ -161,18 +158,20 @@ open class RESTSignalK : SignalKBase {
   }
   
   @MainActor
-  func setValueFromDownloadResponse(path: String, source: String, type: String, data: Data) throws
+  func setValueFromDownloadResponse(path: String, source: String?, type: String, info: [String:Any]) throws
   {
     //let source = source == "nil" ? nil : source
     
+    /*
     guard let info = try JSONSerialization.jsonObject(with: data, options: []) as? [String:Any] else {
       throw SignalKError.invalidServerResponse
-    }
+    }*/
     //guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
     
     try setValueFromResponse(info: info, path: path)
   }
   
+  @MainActor
   func setValueFromResponse(info: [String:Any], path:String ) throws
   {
     //guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
@@ -234,6 +233,12 @@ open class RESTSignalK : SignalKBase {
   }
   
   override public func getSelfPath<T>(_ path: String, source: String?, delegate: SessionDelegate) -> SKValue<T> {
+    
+    let req = PathRequest(path: path, type: String(describing: T.self), source: source)
+    let res = getSelfPaths([req], delegate: delegate)
+    return res[path] as! SKValue<T> //FIXME, check??
+    
+    /*
     let value : SKValue<T> = getOrCreateValue(path, source: source)
     
     if value.cached != nil && value.cached!.timeIntervalSinceNow > (cacheAge * -1) {
@@ -249,11 +254,63 @@ open class RESTSignalK : SignalKBase {
     value.cached = Date()
 
     let type : String  = String(describing: T.self)
-    let sessionId = "\(self.connectionName!)/\(path)/\(source ?? "nil")/\(type)/\(delegate.kind)"
+    let paths = "[{\"path\":\"\(path)\",\"type\":\"\(type)\"\(source != nil ? ",\"source\":\"\(source)\"" : "")}]"
+    let sessionId = "\(self.connectionName!)/\(paths)/\(delegate.kind)"
     
-    sendBackgroundGetHttpRequest(urlString: urlString, forPath: path, sessionId: sessionId, delegate: delegate)
+    do {
+      try sendBackgroundHttpRequest(urlString: urlString, method:"GET", body:nil, sessionId: sessionId, delegate: delegate)
+    } catch {
+      debug("getSelfPath error: \(error)")
+    }
     
     return value
+     */
+  }
+  
+  override public func getSelfPaths(_ paths: [PathRequest], delegate: SessionDelegate) -> [String:SKValueBase]
+  {
+    var result : [String:SKValueBase] = [:]
+    var needed : [[String:String?]] = []
+
+    needed = paths.compactMap { pr in
+      var value = cache.get(pr.path, source: pr.source, type: pr.type)
+      if value == nil {
+        if let val = createValue(pr.type, path:pr.path ) {
+          setSKValue(val, path: pr.path, source: pr.source, timestamp: nil, meta: nil)
+          value = val
+          cache.put(val, path: pr.path, source: pr.source, type: pr.type)
+        } else {
+          value = SKValue(SKPathInfo(pr.path)) as SKValue<Any>
+        }
+      }
+      if let value = value {
+        result[pr.path] = value
+        if value.cached != nil && value.cached!.timeIntervalSinceNow > (cacheAge * -1) {
+          return nil
+        } else {
+          value.cached = Date()
+          var res =  ["path": pr.path, "type": pr.type]
+          if let source = pr.source { res["source"] = source }
+          return res
+        }
+      }
+
+      return nil
+    }
+
+    if needed.count > 0 {
+      do {
+        let urlString = "api/wsk/paths"
+        let data = try JSONEncoder().encode(needed)
+        let sessionId = "\(self.connectionName!)/\(String(data: data, encoding: .utf8)!)/\(delegate.kind)"
+        
+        try sendBackgroundHttpRequest(urlString: urlString, method:"POST", body:needed, sessionId: sessionId, delegate: delegate)
+      } catch {
+        debug("getSelfPaths error: \(error)")
+      }
+    }
+
+    return result
   }
 
   
@@ -355,6 +412,7 @@ open class RESTSignalK : SignalKBase {
   }
 }
 
+@available(iOS 17, *)
 public struct SessionData {
   public var session : URLSession
 }
@@ -362,20 +420,28 @@ public struct SessionData {
 private let defaultsSuiteName = "group.com.scottbender.wilhelm"
 private let pendingKey = "pendingSessions"
 
-private func parseSessionId(_ id: String) -> (connection: String, path: String, source: String?, type: String, kind: String)?
+private func parseSessionId(_ id: String) -> (connection: String, paths: [[String:String]], kind: String)?
 {
   let parts = id.components(separatedBy: "/")
-  guard parts.count == 5 else {
+  guard parts.count == 3 else {
     debug("invalid session id '\(id)'")
     return nil
   }
   
-  return (connection: parts[0],
-          path: parts[1],
-          source: parts[2] == "nil" ? nil : parts[2],
-          type: parts[3],
-          kind: parts[4])
-
+  do {
+    let paths = try JSONSerialization.jsonObject(with: parts[1].data(using: .utf8)!, options: []) as? [[String:String]]
+    guard let paths = paths else {
+      debug("invalid paths in session id '\(id)'")
+      return nil
+    }
+    return (connection: parts[0],
+            paths: paths,
+            kind: parts[2])
+    
+  } catch {
+    debug("invalid paths in session id '\(id)' \(error.localizedDescription)")
+    return nil
+  }
 }
 
 @available(iOS 17, *)
@@ -383,6 +449,7 @@ public class SessionCache {
   public static let shared = SessionCache()
   
   private var sessions : [String: SessionData] = [:]
+  private var restoredSessions : [String: SessionData] = [:]
   private var lock = NSLock()
   private let defaults = UserDefaults(suiteName: defaultsSuiteName)
   private var sessionDelegateCreator: ((_ kind:String) -> SessionDelegate)?
@@ -393,7 +460,6 @@ public class SessionCache {
     self.sessionDelegateCreator = creator
   }
   
-/*
   func savePending()
   {
     if sessions.count == 0 {
@@ -431,47 +497,67 @@ public class SessionCache {
           debug("could not get connection for session id \(id)")
           return
         }
-        if let value = signalK.createValue(info.type, path:info.path) {
-          signalK.putValue(value, path: info.path, source: info.source)
-          let _ = get(for: id, delegate: delegate)
+        for pi in info.paths {
+          if let value = signalK.createValue(pi["type"]!, path:pi["path"]! ) {
+            //signalK.setSKValue(value, path: info.path, source: info.source)
+            signalK.setSKValue(value, path: pi["path"]!, source: pi["source"], timestamp: nil, meta: nil)
+            value.cached = Date()
+          }
         }
+        //let _ = get(for: id, delegate: delegate)
+        let session: URLSession = {
+          let config = URLSessionConfiguration.background(withIdentifier: id)
+          config.isDiscretionary = false
+          config.sessionSendsLaunchEvents = false
+          return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+        }()
+        let data = SessionData(session: session)
+        restoredSessions[id] = data
       } catch {
         debug("error loading session: \(error.localizedDescription)")
       }
     }
+    defaults?.removeObject(forKey: pendingKey)
   }
- */
   
   public func remove(for id: String) {
-    let _ = lock.withLock {
-      sessions.removeValue(forKey: id)
-      //savePending()
-    }
+    lock.lock()
+    sessions.removeValue(forKey: id)
+    restoredSessions.removeValue(forKey: id)
+    savePending()
+    lock.unlock()
   }
   
   public func exists(for id: String) -> Bool {
-    lock.withLock {
-      return sessions[id] != nil
-    }
+    lock.lock()
+    return restoredSessions[id] != nil
+    lock.unlock()
+
+  }
+  
+  public func get(for id: String) -> SessionData? {
+    lock.lock()
+    return restoredSessions[id]
+    lock.unlock()
   }
   
   public func get(for id: String, delegate: URLSessionDelegate) -> SessionData {
-    lock.withLock {
-      if let session = sessions[id] { return session }
+    lock.lock()
+    if let session = sessions[id] { lock.unlock(); return session }
+    
+    debug("create session for \(id)")
       
-      debug("create session for \(id)")
-      
-      let session: URLSession = {
-        let config = URLSessionConfiguration.background(withIdentifier: id)
-        config.isDiscretionary = false
-        config.sessionSendsLaunchEvents = false
-        return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
-      }()
-      let data = SessionData(session: session)
-      sessions[id] = data
-      //savePending()
-      return data
-    }
+    let session: URLSession = {
+      let config = URLSessionConfiguration.background(withIdentifier: id)
+      config.isDiscretionary = false
+      config.sessionSendsLaunchEvents = false
+      return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+    }()
+    let data = SessionData(session: session)
+    sessions[id] = data
+    savePending()
+    lock.unlock()
+    return data
   }
 }
 
@@ -500,7 +586,7 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
     return nil
   }
   
-  open func valueUpdated(path: String) {
+  open func valueUpdated() {
   }
   
   public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL)  {
@@ -514,31 +600,38 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
       debug("could not read data for session id \(id)")
       return
     }
+    
 
     //let sessionId = "\(self.connectionName)/\(path)/\(type)"
-
-    let parts = id.components(separatedBy: "/")
-    guard parts.count > 3 else {
+    guard let info = parseSessionId(id) else {
       debug("invalid session id '\(id)'")
       return
     }
-    
-    let connection = parts[0],
-    path = parts[1],
-    source = parts[2],
-    type = parts[3]
-    
+
     do {
-      let signalK = try getSignalK(connection: connection) as? RESTSignalK
+      let signalK = try getSignalK(connection: info.connection) as? RESTSignalK
       
       guard let signalK else {
         debug("could not get connection for session id \(id)")
         return
       }
       
+      guard let dict : [String:[String:Any]] = try JSONSerialization.jsonObject(with: data, options: []) as? [String:[String:Any]]
+      else {
+        debug("could not decode response \(id)")
+        return
+      }
+      
       Task.detached { @MainActor in
-        try signalK.setValueFromDownloadResponse(path: path, source:source, type: type, data: data)
-        self.valueUpdated(path: path)
+        for pi in info.paths {
+          let path =  pi["path"]!
+          if let value = dict[path] as? [String:Any] {
+            try signalK.setValueFromDownloadResponse(path: path, source:pi["source"], type: pi["type"]!, info: value)
+          } else {
+            debug("invalid value \(id)")
+          }
+        }
+        self.valueUpdated()
       }
     } catch {
       debug("Error updating value from session \(id) : \(error.localizedDescription)")

@@ -46,7 +46,8 @@ public func debug(_ message:String)
 {
 //#if DEBUG
     if #available (iOS 14, *) {
-    logger.log("WilhelmSKD.network: \(message)")
+      //logger.log("WilhelmSKD.network: \(message)")
+      print("WilhelmSKD.network: \(message)")
   } else {
     print("WilhelmSKD.network: \(message)")
   }
@@ -61,3 +62,5 @@ extension OSLog {
   /// Logs the view cycles like viewDidLoad.
   static let debug = OSLog(subsystem: subsystem, category: "network")
 }
+
+

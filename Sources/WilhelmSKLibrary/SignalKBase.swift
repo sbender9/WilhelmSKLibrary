@@ -10,7 +10,7 @@ import Foundation
 @available(iOS 17, *)
 open class SignalKBase: NSObject, SignalKServer {
   var connectionName: String?
-  private let cache = ValueCache()
+  let cache = ValueCache()
 
   public override init()
   {
@@ -31,6 +31,11 @@ open class SignalKBase: NSObject, SignalKServer {
   
   open func getSelfPath<T>(_ path: String, source: String? = nil) async throws -> SKValue<T> {
     return SKValue(SKPathInfo("dummy"))
+  }
+  
+  open func getSelfPaths(_ paths: [PathRequest], delegate: SessionDelegate) -> [String:SKValueBase]
+  {
+    return ["dummy": SKValueBase(SKPathInfo("dummy"))]
   }
   
   open func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void ) {
@@ -93,36 +98,7 @@ open class SignalKBase: NSObject, SignalKServer {
   {
     cache.clear(path, source: source)
   }
-  
-  /*
-  func putValue(_ value: SKValueBase, path: String, source: String?)
-  {
-    if let value = value as? SKValue<Any> {
-      anyCacheLock.withLock {
-        if let source {
-          if anySources[source] == nil {
-            anySources[source] = [:]
-          }
-          anySources[source]![path] = value
-        } else {
-          anyValues[path] = value
-        }
-      }
-    } else {
-      valueCacheLock.withLock {
-        if let source {
-          if sources[source] == nil {
-            sources[source] = [:]
-          }
-          sources[source]![path] = value
-        } else {
-          values[path] = value
-        }
-      }
-    }
-  }
-   */
-  
+    
   open func getOrCreateValue<T>(_ path: String, source: String? ) -> SKValue<T> {
     return cache.get(path, source: source, create: true)!
   }
