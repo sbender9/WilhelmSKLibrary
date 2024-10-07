@@ -33,9 +33,13 @@ open class SignalKBase: NSObject, SignalKServer {
     return SKValue(SKPathInfo("dummy"))
   }
   
+  open func getSelfPaths(_ paths: [PathRequest]) async throws -> [String:SKValueBase] {
+    return [:]
+  }
+  
   open func getSelfPaths(_ paths: [PathRequest], uuid: String, delegate: SessionDelegate) -> [String:SKValueBase]
   {
-    return ["dummy": SKValueBase(SKPathInfo("dummy"))]
+    return [:]
   }
   
   open func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void ) {

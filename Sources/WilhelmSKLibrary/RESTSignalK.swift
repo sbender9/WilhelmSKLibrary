@@ -174,17 +174,20 @@ open class RESTSignalK : SignalKBase {
   }
   
   @MainActor
-  func setValueFromResponse(info: [String:Any], path:String ) throws
+  func setValueFromResponse(info: [String:Any]?, path:String ) throws
   {
-    //guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
-    let meta = info["meta"] as? [String: Any]
-    
-    if let values = info["values"] as? [String:[String:Any]]  {
-      for (key, vmap) in values {
-        setSKValue(vmap["value"], path: path, source: key, timestamp: vmap["timestamp"] as? String, meta: meta)
+    var meta : [String:Any]? = nil
+    if let info {
+      //guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
+      meta = info["meta"] as? [String: Any]
+      
+      if let values = info["values"] as? [String:[String:Any]]  {
+        for (key, vmap) in values {
+          setSKValue(vmap["value"], path: path, source: key, timestamp: vmap["timestamp"] as? String, meta: meta)
+        }
       }
     }
-    setSKValue(info["value"], path: path, source: nil, timestamp: info["timestamp"] as? String, meta: meta)
+    setSKValue(info?["value"], path: path, source: nil, timestamp: info?["timestamp"] as? String, meta: meta)
   }
   
   //@MainActor
@@ -233,6 +236,59 @@ open class RESTSignalK : SignalKBase {
     
     return value
   }
+  
+  override public func getSelfPaths(_ paths: [PathRequest]) async throws -> [String:SKValueBase] {
+    var result : [String:SKValueBase] = [:]
+    var needed : [PathRequest]
+    
+    needed = paths.compactMap { pr in
+      var value = cache.get(pr.path, source: pr.source, type: pr.type)
+      if value == nil {
+        if let val = createValue(pr.type, path:pr.path ) {
+          setSKValue(val, path: pr.path, source: pr.source, timestamp: nil, meta: nil)
+          value = val
+          cache.put(val, path: pr.path, source: pr.source, type: pr.type)
+        } else {
+          value = SKValue(SKPathInfo(pr.path)) as SKValue<Any>
+        }
+      }
+      if let value = value {
+        result[pr.path] = value
+        if value.cached != nil && value.cached!.timeIntervalSinceNow > (cacheAge * -1) {
+          return nil
+        } else {
+          value.cached = Date()
+          return pr
+        }
+      }
+      
+      return nil
+    }
+    
+    if needed.count > 0 {
+      let urlString = "api/wsk/paths"
+      
+      var post : [[String:String?]] = needed.map { pr in
+        var res =  ["path": pr.path, "type": pr.type]
+        if let source = pr.source {
+          res["source"] = source
+        }
+        return res
+      }
+      let data = try JSONEncoder().encode(post)
+      
+      guard let info = try await sendHttpRequest(urlString: urlString, method:"POST", body:data) as? [String:[String:Any]]  else { throw SignalKError.invalidServerResponse }
+      
+      for pr in needed {
+        let path =  pr.path
+        let value = info[path] as? [String:Any]
+        try await setValueFromResponse(info: value, path: path)
+      }
+    }
+    
+    return result
+  }
+
   
   override public func getSelfPath<T>(_ path: String, source: String?, uuid: String, delegate: SessionDelegate) -> SKValue<T> {
     
@@ -517,7 +573,6 @@ public class SessionCache {
     lock.lock()
     return restoredSessions[id] != nil
     lock.unlock()
-
   }
   
   public func get(for id: String) -> SessionData? {
