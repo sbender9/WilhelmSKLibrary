@@ -37,6 +37,7 @@ let electricalGaugeConfig = [
 ]
 
 
+
 //let host = "https://demo.signalk.org"
 let host = "http://localhost:3000"
 
@@ -52,8 +53,8 @@ struct MyApp: App {
     var body: some Scene {
         WindowGroup {
             VStack {
-                ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.theDefault())
-                //ElectricalOverviewView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: ElectricalOverviewGauge(electricalGaugeConfig), theme: Theme.theDefault())
+                //ContentView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: gaugeConfig, theme: Theme.theDefault())
+                ElectricalOverviewView(WilhelmSKLibrary.getSignalK() as! SignalKBase, config: ElectricalOverviewGauge(electricalGaugeConfig), theme: Theme.theDefault())
             }
         }
     }

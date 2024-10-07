@@ -13,14 +13,15 @@ import WilhelmSKDummyGauges
 
 @available(iOS 17, *)
 struct ElectricalOverviewView: View {
-    //@Environment(\.theme) var theme: Theme
-    //@Environment(\.config) var config: GaugeConfig?
-    //@Environment(\.boat) var boat: SignalKBase?
-    
+#if IN_WILHELMSK
+    @Environment(\.theme) var theme: Theme
+    @Environment(\.config) var config: GaugeConfig?
+    @Environment(\.boat) var boat: SignalKBase?
+#else
      let boat: SignalKBase?
      let config: ElectricalOverviewGauge?
      let theme: Theme?
-    
+#endif
     @ObservedObject var systemState : SKValue<String>
     @ObservedObject var dcLoads: SKValue<Double>
     @ObservedObject var stateOfCharge: SKValue<Double>
@@ -41,10 +42,11 @@ struct ElectricalOverviewView: View {
     @ObservedObject var acCurrent: SKValue<Double>
     
     init(_ boat: SignalKBase, config: ElectricalOverviewGauge, theme:Theme) {
+    #if !IN_WILHELMSK
         self.boat = boat
         self.config = config
         self.theme = theme
-        
+    #endif    
         _systemState = Self.getValue(boat: boat, config: config, key: "systemState")
         _dcLoads = Self.getValue(boat: boat, config: config, key: "dcLoadsOverride")
         _stateOfCharge = Self.getValue(boat: boat, config: config, key: "stateOfChargeOverride")
@@ -99,10 +101,7 @@ struct ElectricalOverviewView: View {
         else {
             return ObservedObject(wrappedValue:SKValue(SKPathInfo(key)))
         }
-        
-        //let value :SKValue<T> = boat.getSelfPath(path, source:config.getSource(key), completion:{ (result, error) -> () in})
-        //let value :SKValue<T> = boat.getSelfPath(path, source:config.getSource(key), completion:completion)
-        
+                
         return config.getSelfPath(boat, path: path, source:config.getSource(key), completion:completion)
     }
 #endif
