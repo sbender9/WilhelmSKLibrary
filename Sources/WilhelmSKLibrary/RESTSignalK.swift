@@ -89,6 +89,11 @@ open class RESTSignalK : SignalKBase {
     let (data, resp) = try await session.data(for:request)
     let status = (resp as! HTTPURLResponse).statusCode
     guard status != 401 else { throw SignalKError.unauthorized }
+    
+    if status == 404 && urlString.hasPrefix("api/wsk") {
+      throw SignalKError.needsWilhelmSKPlugin
+    }
+    
     guard status == 200 else { throw SignalKError.message("Invalid server response \(status)") }
     //debug(status)
     //debug(String(data: data, encoding: .utf8))
@@ -277,12 +282,20 @@ open class RESTSignalK : SignalKBase {
       }
       let data = try JSONEncoder().encode(post)
       
-      guard let info = try await sendHttpRequest(urlString: urlString, method:"POST", body:data) as? [String:[String:Any]]  else { throw SignalKError.invalidServerResponse }
-      
-      for pr in needed {
-        let path =  pr.path
-        let value = info[path] as? [String:Any]
-        try await setValueFromResponse(info: value, path: path)
+      do {
+        guard let info = try await sendHttpRequest(urlString: urlString, method:"POST", body:data) as? [String:[String:Any]]  else { throw SignalKError.invalidServerResponse }
+        
+        for pr in needed {
+          let path =  pr.path
+          let value = info[path] as? [String:Any]
+          try await setValueFromResponse(info: value, path: path)
+        }
+      } catch {
+        //make so we try again and display errors on the front end
+        for val in result.values {
+          val.cached = nil
+        }
+        throw error
       }
     }
     
@@ -689,6 +702,7 @@ public enum SignalKError: LocalizedError {
   case invalidServerResponse
   case unauthorized
   case invalidUrl
+  case needsWilhelmSKPlugin
   case message(_ message: String)
   
   public var localizedStringResource: LocalizedStringResource {
@@ -698,6 +712,7 @@ public enum SignalKError: LocalizedError {
     case .invalidServerResponse: return "Invalid server response"
     case .unauthorized: return "Permission Denied"
     case .invalidUrl: return "Invalid URL"
+    case .needsWilhelmSKPlugin: return "Please install and enable the WilhelmSK Plugin"
     }
   }
   
@@ -708,6 +723,7 @@ public enum SignalKError: LocalizedError {
     case .invalidServerResponse: return "Invalid server response"
     case .unauthorized: return "Permission Denied"
     case .invalidUrl: return "Invalid URL"
+    case .needsWilhelmSKPlugin: return "Please install and enable the WilhelmSK Plugin"
     }
   }
   
