@@ -127,11 +127,12 @@ public func debug(_ message:String)
 
 import os.log
 
+private var subsystem = Bundle.main.bundleIdentifier!
+
 extension OSLog {
-  private static var subsystem = Bundle.main.bundleIdentifier!
   
   /// Logs the view cycles like viewDidLoad.
-  static let debug = OSLog(subsystem: subsystem, category: "network")
+  static let debug = OSLog(subsystem: subsystem, category: "views")
 }
 
 
