@@ -39,7 +39,7 @@ open class RESTSignalK : SignalKBase {
   }*/
   
   public init(scheme: String, host: String, port: Int, connectionName: String, updateRate: Double = 0) {
-    self.restEndpoint = "\(scheme)://\(host):\(port)/signalk/v1/"
+    self.restEndpoint = "\(scheme)://\(host):\(port)/"
     self.updateRate = updateRate
     self.host = host
     self.scheme = scheme
@@ -75,22 +75,28 @@ open class RESTSignalK : SignalKBase {
   
   
   //@MainActor
-  func sendHttpRequest(urlString: String, method: String, body: Data?) async throws -> Any? {
-    guard let url = URL(string: "\(restEndpoint)\(urlString)") else { return nil }
+  func sendHttpRequest(urlString: String, method: String, body: Any?) async throws -> Data {
+    guard let url = URL(string: "\(restEndpoint)\(urlString)") else { throw SignalKError.invalidUrl }
     var request = URLRequest(url: url)
     request.httpMethod = method
-    request.httpBody = body
+    if let body {
+      request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    }
     
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     
-    debug("sending \(method) request for \(url)")
+    debug("sending \(method) requeest for \(url)")
     
-    let session = URLSession(configuration: .default)
+    let sessionConfig = URLSessionConfiguration.default
+    sessionConfig.timeoutIntervalForRequest = 10
+    sessionConfig.timeoutIntervalForResource = 10
+    let session = URLSession(configuration: sessionConfig)
+
     let (data, resp) = try await session.data(for:request)
     let status = (resp as! HTTPURLResponse).statusCode
     guard status != 401 else { throw SignalKError.unauthorized }
     
-    if status == 404 && urlString.hasPrefix("api/wsk") {
+    if status == 404 && urlString.contains("/api/wsk/") {
       throw SignalKError.needsWilhelmSKPlugin
     }
     
@@ -98,11 +104,11 @@ open class RESTSignalK : SignalKBase {
     //debug(status)
     //debug(String(data: data, encoding: .utf8))
     
-    let dict = try JSONSerialization.jsonObject(with: data, options: [])
+    //let dict = try JSONSerialization.jsonObject(with: data, options: [])
     
     //debug("reposonse from GET request: \(dict)")
     
-    return dict
+    return data
   }
   
   //@MainActor
@@ -125,7 +131,8 @@ open class RESTSignalK : SignalKBase {
   //@MainActor
   public func sendGet(_ urlString: String) async throws -> Any?
   {
-    return try await sendHttpRequest(urlString: urlString, method: "GET", body: nil)
+    let data = try await sendHttpRequest(urlString: urlString, method: "GET", body: nil)
+    return try JSONSerialization.jsonObject(with: data, options: [])
   }
   
   //@MainActor
@@ -133,6 +140,11 @@ open class RESTSignalK : SignalKBase {
     guard JSONSerialization.isValidJSONObject(data) else { throw SignalKError.message("invalid put data") }
     let putData = try JSONSerialization.data(withJSONObject: data)
     return try await sendHttpRequestIgnoringStatus(urlString: urlString, method: "PUT", body: putData)
+  }
+  
+  public func sendPost(_ urlString: String, body: Any?) async throws -> Any?
+  {
+    return try await sendHttpRequest(urlString: urlString, method: "POST", body: body)
   }
   
   
@@ -144,7 +156,7 @@ open class RESTSignalK : SignalKBase {
     }
     
     let path = value.info.path
-    let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+    let urlString = "signalk/v1/api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     
     //make so another call does get made
     value.cached = Date()
@@ -249,7 +261,7 @@ open class RESTSignalK : SignalKBase {
     needed = paths.compactMap { pr in
       var value = cache.get(pr.path, source: pr.source, type: pr.type)
       if value == nil {
-        if let val = createValue(pr.type, path:pr.path ) {
+        if let val = Self.createValue(pr.type, path:pr.path ) {
           setSKValue(val, path: pr.path, source: pr.source, timestamp: nil, meta: nil)
           value = val
           cache.put(val, path: pr.path, source: pr.source, type: pr.type)
@@ -271,7 +283,7 @@ open class RESTSignalK : SignalKBase {
     }
     
     if needed.count > 0 {
-      let urlString = "api/wsk/paths"
+      let urlString = "signalk/v1/api/wsk/paths"
       
       var post : [[String:String?]] = needed.map { pr in
         var res =  ["path": pr.path, "type": pr.type]
@@ -280,11 +292,13 @@ open class RESTSignalK : SignalKBase {
         }
         return res
       }
-      let data = try JSONEncoder().encode(post)
+      //let data = try JSONEncoder().encode(post)
       
       do {
-        guard let info = try await sendHttpRequest(urlString: urlString, method:"POST", body:data) as? [String:[String:Any]]  else { throw SignalKError.invalidServerResponse }
-        
+        let data = try await sendHttpRequest(urlString: urlString, method:"POST", body:post)
+        guard let info = try JSONSerialization.jsonObject(with: data, options: []) as? [String:[String:Any]]
+        else { throw SignalKError.invalidServerResponse }
+
         for pr in needed {
           let path =  pr.path
           let value = info[path] as? [String:Any]
@@ -318,7 +332,7 @@ open class RESTSignalK : SignalKBase {
     needed = paths.compactMap { pr in
       var value = cache.get(pr.path, source: pr.source, type: pr.type)
       if value == nil {
-        if let val = createValue(pr.type, path:pr.path ) {
+        if let val = Self.createValue(pr.type, path:pr.path ) {
           setSKValue(val, path: pr.path, source: pr.source, timestamp: nil, meta: nil)
           value = val
           cache.put(val, path: pr.path, source: pr.source, type: pr.type)
@@ -344,7 +358,7 @@ open class RESTSignalK : SignalKBase {
 
     if needed.count > 0 {
       do {
-        let urlString = "api/wsk/paths"
+        let urlString = "signalk/v1/api/wsk/paths"
         let data = try JSONEncoder().encode(needed)
         
         var post : [[String:String?]] = needed.map { pr in
@@ -381,7 +395,9 @@ open class RESTSignalK : SignalKBase {
     return value
   }
   
-  func processResponse(_ res: [String:Any], path: String,
+  func processResponse(_ res: [String:Any],
+                       path: String,
+                       multipleCallbacks: Bool,
                        completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void) {
     guard let state = res["state"] as? String,
           let statusCode = res["statusCode"] as? Int,
@@ -394,43 +410,54 @@ open class RESTSignalK : SignalKBase {
 
     let skState = SignalKResponseState(rawValue: state) ?? SignalKResponseState.failed
     switch skState {
-    case .completed:
-      fallthrough
-    case .failed:
-      clearCache(path)
-      completion(skState, statusCode, res, nil)
-
-    default:
-      /*
-      guard let href = res["href"] as? String else {
-        completion(nil, nil , res, SignalKError.invalidServerResponse)
-        return
-      }
-       */
-      clearCache(path)
-      completion(skState, statusCode, res, nil)
-      
-      let _ = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { timer in
-        Task {
-          do {
-            let res = try await self.sendGet("api/actions/\(requestId)")
-            guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
-            self.processResponse(res, path: path, completion: completion)
-          } catch {
-            self.clearCache(path)
-            completion(SignalKResponseState.failed, nil, nil, error)
+      case .completed:
+        fallthrough
+      case .failed:
+        clearCache(path)
+        completion(skState, statusCode, res, nil)
+        
+      case .pending:
+        /*
+         guard let href = res["href"] as? String else {
+         completion(nil, nil , res, SignalKError.invalidServerResponse)
+         return
+         }
+         */
+        clearCache(path)
+        
+        if multipleCallbacks {
+          completion(skState, statusCode, res, nil)
+        }
+        
+        //FIXME: needs to eventually timeout
+        
+        DispatchQueue.main.async {
+          let _ = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { timer in
+            Task {
+              do {
+                let res = try await self.sendGet("signalk/v1/requests/\(requestId)")
+                guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
+                self.processResponse(res, path: path, multipleCallbacks: multipleCallbacks, completion: completion)
+              } catch {
+                self.clearCache(path)
+                completion(SignalKResponseState.failed, nil, nil, error)
+              }
+            }
           }
         }
-      }
     }
   }
   
   override open func putSelfPath(path: String, value: Any?, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void ) {
-    let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+    putSelfPath(path: path, value: value, multipleCallbacks: true, completion: completion)
+  }
+  
+  func putSelfPath(path: String, value: Any?, multipleCallbacks: Bool, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void ) {
+    let urlString = "signalk/v1/api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     Task {
       do {
         let res = try await sendPut(urlString, data: ["value": value]) as! [String:Any]
-        processResponse(res, path:path, completion: completion)
+        processResponse(res, path:path, multipleCallbacks: multipleCallbacks, completion: completion)
       } catch {
         completion(SignalKResponseState.failed, nil, nil, error)
       }
@@ -445,19 +472,69 @@ open class RESTSignalK : SignalKBase {
     return nil
   }
   
-  override open func putSelfPath(path: String, value: Any?) async throws -> [String:Any] {
-    let urlString = "api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
+  open func oldputSelfPath(path: String, value: Any?) async throws -> (SignalKResponseState, Int, [String:Any]) {
+    let urlString = "signalk/v1/api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     let res = try await sendPut(urlString, data: ["value": value]) as! [String:Any]
     clearCache(path)
-    return res
+    
+    guard let state = res["state"] as? String,
+          let statusCode = res["statusCode"] as? Int,
+          let requestId = res["requestId"] as? String
+    else {
+      throw SignalKError.invalidServerResponse
+    }
+  
+    let skState = SignalKResponseState(rawValue: state) ?? SignalKResponseState.failed
+    
+    let message = res["message"] as? String
+    
+    switch skState {
+      case .completed:
+        if statusCode != 200 {
+          throw SignalKError.message(message ?? "Unknown error \(statusCode)")
+        }
+        return (skState, statusCode, res)
+      case .pending:
+        return (skState, statusCode, res)
+
+      case .failed:
+        throw SignalKError.message(message ?? "Unknown error \(statusCode)")
+    }
   }
+  
+  override open func putSelfPath(path: String, value: Any?) async throws -> (SignalKResponseState, Int?, [String:Any]?) {
+    return try await withCheckedThrowingContinuation  { continuation in
+      //boat.putPath(path, value: value, delegate: self, userInfo: ["continuation": continuation])
+
+      self.putSelfPath(path: path, value: value, multipleCallbacks: false) { state, statusCode, res, error in
+        if let error {
+          continuation.resume(throwing: error)
+        } else {
+          continuation.resume(returning: (state, statusCode, res))
+        }
+      }
+
+    }
+  }
+  
+  func didPutPath(_ path: String, withError error: (any Error)?, userInfo: [AnyHashable : Any] = [:]) {
+    let continuation = userInfo["continuation"] as! CheckedContinuation<Void, Error>
+    self.clearCache(path)
+    guard error == nil else {
+      continuation.resume(throwing: error!)
+      return
+    }
+    continuation.resume()
+  }
+
   
   open func login() async throws {
     if let login = getLogin() {
-      let data = try JSONEncoder().encode(["username": login.username, "password": login.password])
+      let post = ["username": login.username, "password": login.password]
       
-      let res = try await sendHttpRequest(urlString: "auth/login", method: "POST", body: data) as? [String:Any]
-      
+      let data = try await sendHttpRequest(urlString: "signalk/v1/auth/login", method: "POST", body: post)
+      let res = try JSONSerialization.jsonObject(with: data, options: []) as? [String:Any]
+
       self.token = res?["token"] as? String
     }
   }
@@ -552,7 +629,7 @@ public class SessionCache {
         }
         
         for pi in paths {
-          if let value = signalK.createValue(pi.type, path:pi.path ) {
+          if let value = SignalKBase.createValue(pi.type, path:pi.path ) {
             //signalK.setSKValue(value, path: info.path, source: info.source)
             signalK.setSKValue(value, path: pi.path, source: pi.source, timestamp: nil, meta: nil)
             value.cached = Date()
@@ -697,7 +774,7 @@ open class SessionDelegate: NSObject, URLSessionDelegate, URLSessionDownloadDele
 }
 
 @available(iOS 16, *)
-public enum SignalKError: LocalizedError {
+public enum SignalKError: LocalizedError, CustomLocalizedStringResourceConvertible {
   case invalidType
   case invalidServerResponse
   case unauthorized

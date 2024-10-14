@@ -51,11 +51,11 @@ open class SignalKBase: NSObject, SignalKServer {
     return res
   }
   
-  open func putSelfPath(path: String, value: Any?) async throws -> [String:Any] {
-    return [:]
+  open func putSelfPath(path: String, value: Any?) async throws -> (SignalKResponseState, Int?, [String:Any]?) {
+    return (SignalKResponseState.failed, 0, [:])
   }
   
-  public func setValue(_ base:SKValueBase, value: Any?)
+  public static func setValue(_ base:SKValueBase, value: Any?)
   {
     if let skvalue = base as? SKValue<SKBool> {
       skvalue.value = SKBool(value)
@@ -81,7 +81,7 @@ open class SignalKBase: NSObject, SignalKServer {
     }
   }
   
-  func createValue(_ ofType: String, path: String) -> SKValueBase?
+  public static func createValue(_ ofType: String, path: String) -> SKValueBase?
   {
     let info = SKPathInfo(path)
     switch ofType {
