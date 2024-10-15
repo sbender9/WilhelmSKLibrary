@@ -147,6 +147,11 @@ final public class SKValue<T>: SKValueBase, Sendable
       self.value = value
     }
   }
+  
+  public func getMeasurement(_ type: String?) -> Measurement<Dimension>? {
+    let unitType = type != nil ? UnitTypes(rawValue: type!) : nil
+    return getMeasurement(unitType)
+  }
 
   public func getMeasurement(_ type: UnitTypes? = nil) -> Measurement<Dimension>? {
     guard let value = value else { return nil }
@@ -241,7 +246,7 @@ nonisolated(unsafe) let defaultUnits : [UnitTypes:Dimension] = [
   .enginePressure: UnitPressure.poundsForcePerSquareInch, //FIXME should be kPSI
   .environmentalPressure: UnitPressure.inchesOfMercury,
   .energy: UnitEnergy.kilowattHours,
-  //.rateOfTurn: KDegreesM,
+  .rateOfTurn: UnitAngle.degrees,
   //.flowRate: kGallonsH,
   //.fuelEconomy: kFuelEconomy,
 ]
@@ -260,7 +265,8 @@ public nonisolated(unsafe) let skToSwiftUnits :[String:Dimension] = [
   UnitSpeed.metersPerSecond.symbol: UnitSpeed.metersPerSecond,
   UnitTemperature.kelvin.symbol: UnitTemperature.kelvin,
   "m3": UnitVolume.cubicMeters,
-  RatioUnit.ratio.symbol: RatioUnit.ratio
+  RatioUnit.ratio.symbol: RatioUnit.ratio,
+  RateOfTurnUnit.radians.symbol: RateOfTurnUnit.radians
 ]
 
 nonisolated(unsafe) let defaultNonPrefUnitConversion :[String:Dimension] = [
@@ -284,5 +290,15 @@ final class RatioUnit: Dimension {
   
   override class func baseUnit() -> RatioUnit {
     return percent
-  }}
+  }
+}
+
+final class RateOfTurnUnit: Dimension {
+  nonisolated(unsafe) static let degrees = RateOfTurnUnit(symbol: "deg/s", converter: UnitAngle.degrees.converter)
+  nonisolated(unsafe) static let radians = RateOfTurnUnit(symbol: "rad/s", converter: UnitConverterLinear(coefficient: 1.0))
+  
+  override class func baseUnit() -> RateOfTurnUnit {
+    return radians
+  }
+}
 
