@@ -60,6 +60,15 @@ public struct JSONString : JSONObject {
   }
 }
 
+public struct JSONNumber : JSONObject {
+  public var value: Sendable { get { number } }
+  public var number : Double
+  
+  public init(_ number: Double) {
+    self.number = number
+  }
+}
+
 public struct JSONDictionary : JSONObject {
   public var value: Sendable { get { dictionary } }
   public var dictionary : [String:JSONObject]
@@ -72,6 +81,8 @@ public struct JSONDictionary : JSONObject {
 public func JSONObjectToAny(_ object: JSONObject) -> Any? {
   if let object = object as? JSONString {
     return object.string
+  } else if let number = object as? JSONNumber {
+    return number.number
   } else if let array = object as? JSONArray {
     return array.array.compactMap {
       return JSONObjectToAny($0)
@@ -92,6 +103,8 @@ public func JSONObjectToAny(_ object: JSONObject) -> Any? {
 public func getJSONObject(from json: Any?) -> JSONObject? {
   if let string = json as? String {
     return JSONString(string)
+  } else if let number = json as? Double {
+    return JSONNumber(number)
   } else if let array = json as? [Any] {
     return JSONArray(array.compactMap {
       return getJSONObject(from: $0)
