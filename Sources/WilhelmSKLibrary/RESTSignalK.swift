@@ -9,6 +9,9 @@
 import Foundation
 import Combine
 
+private let putCheckInterval = 1.0
+private let putCheckRetryCount = 8
+
 @available(iOS 17, *)
 open class RESTSignalK : SignalKBase {
   let scheme: String, host: String, port: Int
@@ -398,6 +401,7 @@ open class RESTSignalK : SignalKBase {
   func processResponse(_ res: [String:Any],
                        path: String,
                        multipleCallbacks: Bool,
+                       repeatCount: Int,
                        completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void) {
     guard let state = res["state"] as? String,
           let statusCode = res["statusCode"] as? Int,
@@ -431,13 +435,18 @@ open class RESTSignalK : SignalKBase {
         
         //FIXME: needs to eventually timeout
         
+        guard repeatCount != putCheckRetryCount else {
+          completion(SignalKResponseState.failed, nil, nil, SignalKError.message("put request timed out"))
+          return
+        }
+        
         DispatchQueue.main.async {
-          let _ = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { timer in
+          let _ = Timer.scheduledTimer(withTimeInterval: putCheckInterval, repeats: false) { timer in
             Task {
               do {
                 let res = try await self.sendGet("signalk/v1/requests/\(requestId)")
                 guard let res = res as? [String:Any]  else { throw SignalKError.invalidServerResponse }
-                self.processResponse(res, path: path, multipleCallbacks: multipleCallbacks, completion: completion)
+                self.processResponse(res, path: path, multipleCallbacks: multipleCallbacks, repeatCount: repeatCount+1, completion: completion)
               } catch {
                 self.clearCache(path)
                 completion(SignalKResponseState.failed, nil, nil, error)
@@ -452,12 +461,12 @@ open class RESTSignalK : SignalKBase {
     putSelfPath(path: path, value: value, multipleCallbacks: true, completion: completion)
   }
   
-  func putSelfPath(path: String, value: Any?, multipleCallbacks: Bool, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void ) {
+  private func putSelfPath(path: String, value: Any?, multipleCallbacks: Bool, completion: @escaping (SignalKResponseState, Int?, [String:Any]?, Error?) -> Void ) {
     let urlString = "signalk/v1/api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     Task {
       do {
         let res = try await sendPut(urlString, data: ["value": value]) as! [String:Any]
-        processResponse(res, path:path, multipleCallbacks: multipleCallbacks, completion: completion)
+        processResponse(res, path:path, multipleCallbacks: multipleCallbacks, repeatCount: 0, completion: completion)
       } catch {
         completion(SignalKResponseState.failed, nil, nil, error)
       }
@@ -504,7 +513,6 @@ open class RESTSignalK : SignalKBase {
   
   override open func putSelfPath(path: String, value: Any?) async throws -> (SignalKResponseState, Int?, [String:Any]?) {
     return try await withCheckedThrowingContinuation  { continuation in
-      //boat.putPath(path, value: value, delegate: self, userInfo: ["continuation": continuation])
 
       self.putSelfPath(path: path, value: value, multipleCallbacks: false) { state, statusCode, res, error in
         if let error {
