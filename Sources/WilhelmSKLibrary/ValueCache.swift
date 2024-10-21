@@ -21,12 +21,13 @@ class ValueCache {
     caches["String"] = ValueTypeCache<String>()
     caches["Any"] = ValueTypeCache<Any>()
     caches["Array<String>"] = ValueTypeCache<Array<String>>()
+    caches["Dictionary<String, Double>"] = ValueTypeCache<[String:Double]>()
   }
   
   func get<T>(_ path: String, source: String? = nil, create: Bool = false) -> SKValue<T>? {
     let type = String(describing: T.self)
     var cache = caches[type] as? ValueTypeCache<T>
-    if cache == nil && create == false {
+    if cache == nil {
       debug("mising cache for \(type)")
       return nil
     }
@@ -55,6 +56,8 @@ class ValueCache {
       (cache as! ValueTypeCache<Any>).put(value, path: path, source: source)
     case "Array<String>":
       (cache as! ValueTypeCache<Array<String>>).put(value, path: path, source: source)
+      case "Dictionary<String, Double>":
+        (cache as! ValueTypeCache<[String:Double]>).put(value, path: path, source: source)
     default:
       return
     }
@@ -75,6 +78,8 @@ class ValueCache {
       } else if let cache = cache as? ValueTypeCache<Any> {
         cache.set(value, path: path, source: source, timestamp: timestamp,meta:meta)
       } else if let cache = cache as? ValueTypeCache<Array<String>> {
+        cache.set(value, path: path, source: source, timestamp: timestamp,meta:meta)
+      } else if let cache = cache as? ValueTypeCache<[String:Double]> {
         cache.set(value, path: path, source: source, timestamp: timestamp,meta:meta)
       } else {
         debug("missing cache \(String(describing: cache))")
@@ -98,6 +103,8 @@ class ValueCache {
         cache.clear(path, source: source)
       } else if let cache = cache as? ValueTypeCache<Array<String>> {
         cache.clear(path, source: source)
+      } else if let cache = cache as? ValueTypeCache<[String:Double]> {
+        cache.clear(path, source: source)
       } else {
         debug("missing cache \(String(describing: cache))")
       }
@@ -120,6 +127,8 @@ class ValueCache {
       } else if let cache = cache as? ValueTypeCache<Any> {
         cache.getPaths(&res)
       } else if let cache = cache as? ValueTypeCache<Array<String>> {
+        cache.getPaths(&res)
+      } else if let cache = cache as? ValueTypeCache<[String:Double]> {
         cache.getPaths(&res)
       } else {
         debug("missing cache \(String(describing: cache))")
@@ -205,14 +214,14 @@ class ValueTypeCache<T> {
     }
     if let source = source {
       if let skvalue = self.sources[source]?[path] {
-        debug("ValueTypeCache<\(T.self)> setting \(value) \(source) for \(path)")
+        //debug("ValueTypeCache<\(T.self)> setting \(value) \(source) for \(path)")
         skvalue.value = val as? T
         skvalue.setTimestamp(timestamp)
         skvalue.info.updateMeta(meta)
       }
     } else {
       if let skvalue = self.cache[path] {
-        debug("ValueTypeCache<\(T.self)> setting \(value) for \(path)")
+        //debug("ValueTypeCache<\(T.self)> setting \(value) for \(path)")
         skvalue.value = val as? T
         skvalue.setTimestamp(timestamp)
         skvalue.info.updateMeta(meta)
@@ -224,6 +233,7 @@ class ValueTypeCache<T> {
   func clear(_ path: String, source: String? = nil)
   {
     lock.lock()
+    debug("ValueTypeCache<\(T.self)> clear \(path)")
     if let source = source {
       if let sourceMap = sources[source],
          let value = sourceMap[path] {
@@ -240,6 +250,7 @@ class ValueTypeCache<T> {
   
   func getPaths(_ paths: inout [String:SKValueBase]) {
     lock.lock()
+    debug("ValueTypeCache<\(T.self)> get paths")
     for sourceMap in sources.values {
       for value in sourceMap.values {
         if paths[value.info.path] == nil {

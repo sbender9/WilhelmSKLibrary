@@ -99,10 +99,13 @@ open class RESTSignalK : SignalKBase {
     let status = (resp as! HTTPURLResponse).statusCode
     guard status != 401 else { throw SignalKError.unauthorized }
     
-    if status == 404 && urlString.contains("/api/wsk/") {
+    if status == 404 && urlString.contains("/api/wsk/push/") {
+      throw SignalKError.needsPushPlugin
+    } else if status == 404 && urlString.contains("/api/wsk/") {
       throw SignalKError.needsWilhelmSKPlugin
     }
-    
+
+    guard status != 404 else { throw SignalKError.notFound }
     guard status == 200 else { throw SignalKError.message("Invalid server response \(status)") }
     //debug(status)
     //debug(String(data: data, encoding: .utf8))
@@ -788,27 +791,33 @@ public enum SignalKError: LocalizedError, CustomLocalizedStringResourceConvertib
   case unauthorized
   case invalidUrl
   case needsWilhelmSKPlugin
+  case needsPushPlugin
+  case notFound
   case message(_ message: String)
   
   public var localizedStringResource: LocalizedStringResource {
     switch self {
-    case let .message(message): return "\(message)"
-    case .invalidType: return "Invalid type"
-    case .invalidServerResponse: return "Invalid server response"
-    case .unauthorized: return "Permission Denied"
-    case .invalidUrl: return "Invalid URL"
-    case .needsWilhelmSKPlugin: return "Please install and enable the WilhelmSK Plugin"
+      case let .message(message): return "\(message)"
+      case .invalidType: return "Invalid type"
+      case .invalidServerResponse: return "Invalid server response"
+      case .unauthorized: return "Permission Denied"
+      case .invalidUrl: return "Invalid URL"
+      case .needsWilhelmSKPlugin: return "Please install and enable the WilhelmSK Plugin"
+      case .needsPushPlugin: return "Please install and enable the signalk-push-plugin"
+      case .notFound: return "Path not found"
     }
   }
   
   public var errorDescription: String? {
     switch self {
-    case let .message(message): return "\(message)"
-    case .invalidType: return "Invalid type"
-    case .invalidServerResponse: return "Invalid server response"
-    case .unauthorized: return "Permission Denied"
-    case .invalidUrl: return "Invalid URL"
-    case .needsWilhelmSKPlugin: return "Please install and enable the WilhelmSK Plugin"
+      case let .message(message): return "\(message)"
+      case .invalidType: return "Invalid type"
+      case .invalidServerResponse: return "Invalid server response"
+      case .unauthorized: return "Permission Denied"
+      case .invalidUrl: return "Invalid URL"
+      case .needsWilhelmSKPlugin: return "Please install and enable the WilhelmSK Plugin"
+      case .needsPushPlugin: return "Please install and enable the signalk-push-plugin"
+      case .notFound: return "Path not found"
     }
   }
   

@@ -76,6 +76,8 @@ open class SignalKBase: NSObject, SignalKServer {
       //}
     } else if let skvalue = base as? SKValue<Array<String>> {
       skvalue.value = value as? Array<String>
+    } else if let skvalue = base as? SKValue<[String:Double]> {
+      skvalue.value = value as? [String:Double]
     } else {
       debug("invalid value \(String(describing: value))")
     }
@@ -85,16 +87,17 @@ open class SignalKBase: NSObject, SignalKServer {
   {
     let info = SKPathInfo(path)
     switch ofType {
-    case "SKBool": return SKValue<SKBool>(info)
-    case "Double": return SKValue<Double>(info)
-    case "String": return SKValue<String>(info)
-    case "Int": return SKValue<Int>(info)
-    case "Float": return SKValue<Float>(info)
-    case "Any": return SKValue<Any>(info)
-    case "Array<String>": return SKValue<Array<String>>(info)
-    default:
-      debug("could not create value of type \(ofType)")
-      return nil
+      case "SKBool": return SKValue<SKBool>(info)
+      case "Double": return SKValue<Double>(info)
+      case "String": return SKValue<String>(info)
+      case "Int": return SKValue<Int>(info)
+      case "Float": return SKValue<Float>(info)
+      case "Any": return SKValue<Any>(info)
+      case "Array<String>": return SKValue<Array<String>>(info)
+      case "Dictionary<String, Double>": return SKValue<[String:Double]>(info)
+      default:
+        debug("could not create value of type \(ofType)")
+        return nil
     }
   }
   
@@ -108,7 +111,8 @@ open class SignalKBase: NSObject, SignalKServer {
   }
   
   open func setSKValue(_ value: Any?, path: String, source: String?, timestamp: String?, meta: [String: Any]?) {
-    cache.set(value, path: path, source: source, timestamp: timestamp, meta: meta)
+    
+    cache.set(value is NSNull ? nil : value, path: path, source: source, timestamp: timestamp, meta: meta)
   }
   
   open func getUniqueCachedValues() -> [String:SKValueBase] {
