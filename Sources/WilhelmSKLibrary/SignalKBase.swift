@@ -110,8 +110,7 @@ open class SignalKBase: NSObject, SignalKServer {
     return cache.get(path, source: source, create: true)!
   }
   
-  open func setSKValue(_ value: Any?, path: String, source: String?, timestamp: String?, meta: [String: Any]?) {
-    
+  open func setSKValue(_ value: Any?, path: String, source: String?, timestamp: String?, meta: [String: Any]?) {    
     cache.set(value is NSNull ? nil : value, path: path, source: source, timestamp: timestamp, meta: meta)
   }
   

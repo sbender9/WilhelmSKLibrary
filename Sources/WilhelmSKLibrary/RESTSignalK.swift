@@ -13,7 +13,7 @@ private let putCheckInterval = 1.0
 private let putCheckRetryCount = 8
 
 @available(iOS 17, *)
-open class RESTSignalK : SignalKBase {
+open class RESTSignalK : SignalKBase, URLSessionDelegate {
   let scheme: String, host: String, port: Int
   let restEndpoint: String
   let updateRate: Double
@@ -93,7 +93,7 @@ open class RESTSignalK : SignalKBase {
     let sessionConfig = URLSessionConfiguration.default
     sessionConfig.timeoutIntervalForRequest = 10
     sessionConfig.timeoutIntervalForResource = 10
-    let session = URLSession(configuration: sessionConfig)
+    let session = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
 
     let (data, resp) = try await session.data(for:request)
     let status = (resp as! HTTPURLResponse).statusCode
@@ -116,7 +116,17 @@ open class RESTSignalK : SignalKBase {
     
     return data
   }
-  
+
+  public func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+    let protectionSpace = challenge.protectionSpace
+    
+    guard let serverTrust = protectionSpace.serverTrust else {
+      return (.performDefaultHandling, nil)
+    }
+    let credential = URLCredential(trust: serverTrust)
+    return (.useCredential, credential)
+  }
+    
   //@MainActor
   func sendHttpRequestIgnoringStatus(urlString: String, method: String, body: Data?) async throws -> Any? {
     guard let url = URL(string: "\(restEndpoint)\(urlString)") else { return nil }
@@ -126,8 +136,18 @@ open class RESTSignalK : SignalKBase {
     
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     
-    let session = URLSession(configuration: .default)
-    let (data, _) = try await session.data(for: request)
+    let sessionConfig = URLSessionConfiguration.default
+    sessionConfig.timeoutIntervalForRequest = 10
+    sessionConfig.timeoutIntervalForResource = 10
+    let session = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
+    let (data, resp) = try await session.data(for: request)
+    
+    let status = (resp as! HTTPURLResponse).statusCode
+    guard status != 401 else { throw SignalKError.unauthorized }
+    guard status != 404 else { throw SignalKError.notFound }
+
+    guard status == 200 || status == 202 else { throw SignalKError.message("Invalid server response \(status)") }
+
     
     let dict = try JSONSerialization.jsonObject(with: data, options: [])
     
@@ -209,8 +229,11 @@ open class RESTSignalK : SignalKBase {
           setSKValue(vmap["value"], path: path, source: key, timestamp: vmap["timestamp"] as? String, meta: meta)
         }
       }
+      let value = info.index(forKey: "value") != nil ? info["value"] : info
+      setSKValue(value, path: path, source: nil, timestamp: info["timestamp"] as? String, meta: meta)
+    } else {
+      setSKValue(nil, path: path, source: nil, timestamp: nil, meta: meta)
     }
-    setSKValue(info?["value"], path: path, source: nil, timestamp: info?["timestamp"] as? String, meta: meta)
   }
   
   //@MainActor
@@ -468,7 +491,8 @@ open class RESTSignalK : SignalKBase {
     let urlString = "signalk/v1/api/vessels/self/\(path.replacingOccurrences(of: ".", with: "/"))"
     Task {
       do {
-        let res = try await sendPut(urlString, data: ["value": value]) as! [String:Any]
+        let data = ["value": value]
+        let res = try await sendPut(urlString, data: data) as! [String:Any]
         processResponse(res, path:path, multipleCallbacks: multipleCallbacks, repeatCount: 0, completion: completion)
       } catch {
         completion(SignalKResponseState.failed, nil, nil, error)
