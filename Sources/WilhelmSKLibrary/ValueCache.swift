@@ -28,15 +28,35 @@ class ValueCache {
     let type = String(describing: T.self)
     var cache = caches[type] as? ValueTypeCache<T>
     if cache == nil {
-      debug("mising cache for \(type)")
+      debug("ValueCache mising cache for \(type)")
       return nil
     }
     return cache!.get(path, source: source, create: create)
   }
   
   func get(_ path: String, source: String?, type: String) -> SKValueBase? {
-    guard let cache = caches[type] as? ValueTypeCache<Any> else { debug("ValueCache could not get cache for \(type)"); return nil }  //FIXME not any?
-    return cache.get(path, source: source)
+    let cache = caches[type]
+    switch type {
+      case "SKBool":
+        return (cache as! ValueTypeCache<SKBool>).get(path, source: source)
+      case "Int":
+        return (cache as! ValueTypeCache<Int>).get(path, source: source)
+      case "Float":
+        return (cache as! ValueTypeCache<Float>).get(path, source: source)
+      case "Double":
+        return (cache as! ValueTypeCache<Double>).get(path, source: source)
+      case "String":
+        return (cache as! ValueTypeCache<String>).get(path, source: source)
+      case "Any":
+        return (cache as! ValueTypeCache<Any>).get(path, source: source)
+      case "Array<String>":
+        return (cache as! ValueTypeCache<Array<String>>).get(path, source: source)
+      case "Dictionary<String, Double>":
+        return (cache as! ValueTypeCache<[String:Double]>).get(path, source: source)
+      default:
+        debug("ValueCache no cache for \(type)")
+        return nil
+    }
   }
     
   func put(_ value: SKValueBase, path: String, source: String?, type: String) {
@@ -250,7 +270,13 @@ class ValueTypeCache<T> {
   
   func getPaths(_ paths: inout [String:SKValueBase]) {
     lock.lock()
-    debug("ValueTypeCache<\(T.self)> get paths")
+    //debug("ValueTypeCache<\(T.self)> get paths")
+    for value in cache.values {
+      if paths[value.info.path] == nil {
+        paths[value.info.path] = value
+      }
+    }
+
     for sourceMap in sources.values {
       for value in sourceMap.values {
         if paths[value.info.path] == nil {
