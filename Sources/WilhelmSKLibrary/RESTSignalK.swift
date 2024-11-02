@@ -14,11 +14,13 @@ private let putCheckRetryCount = 8
 
 @available(iOS 17, *)
 open class RESTSignalK : SignalKBase, URLSessionDelegate {
-  let scheme: String, host: String, port: Int
-  let restEndpoint: String
-  let updateRate: Double
-  var token : String?
+  var scheme: String, host: String, port: Int
+  var restEndpoint: String
+  var updateRate: Double
+  open var token : String?
   public var cacheAge : TimeInterval = 1.0
+  public var shouldUpdateValues = true
+  
   //private var tasks : [URLSessionDownloadTask] = []
   
   var timer: Timer?
@@ -43,13 +45,21 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
   
   public init(scheme: String, host: String, port: Int, connectionName: String, updateRate: Double = 0) {
     self.restEndpoint = "\(scheme)://\(host):\(port)/"
-    self.updateRate = updateRate
     self.host = host
     self.scheme = scheme
     self.port = port
-    
+    self.updateRate = updateRate
+
     super.init(connectionName: connectionName)
   }
+  
+  open func updateConnectionInfo(scheme: String, host: String, port: Int) {
+    self.restEndpoint = "\(scheme)://\(host):\(port)/"
+    self.host = host
+    self.scheme = scheme
+    self.port = port
+  }
+  
   
   open func hasToken() -> Bool {
     return token != nil
@@ -177,6 +187,8 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
   @MainActor
   private func updateVaue(_ value: SKValueBase) async throws -> Bool {
     
+    guard shouldUpdateValues else { return true }
+    
     if value.cached != nil && value.cached!.timeIntervalSinceNow > (cacheAge * -1) {
       return false
     }
@@ -187,8 +199,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     //make so another call does get made
     value.cached = Date()
     
-    do {
-      //let theType = type(of: path)
+    //do {
       guard let info = try await sendGet(urlString) as? [String:Any] else { throw SignalKError.invalidServerResponse }
       //guard let source = info["$source"] as? String else { throw SignalKError.invalidServerResponse }
       
@@ -196,10 +207,12 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
       
       startTimer()
       return true
+    /*
     } catch {
       debug("error update value \(error)")
     }
     return false
+     */
   }
   
   @MainActor
@@ -238,6 +251,9 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
   
   //@MainActor
   private func updateValues() async {
+    
+    guard shouldUpdateValues else { return }
+
     for value in getUniqueCachedValues().values {
       do {
         let _ = try await updateVaue(value)
@@ -262,11 +278,13 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
   {
     let value : SKValue<T> = getOrCreateValue(path, source: source)
     
-    Task {
-      do {
-        let _ = try await updateVaue(value)
-      } catch {
-        debug("error getObservableSelfPath \(error)")
+    if shouldUpdateValues {
+      Task {
+        do {
+          let _ = try await updateVaue(value)
+        } catch {
+          debug("error getObservableSelfPath \(error)")
+        }
       }
     }
     
@@ -310,6 +328,8 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
       
       return nil
     }
+    
+    guard shouldUpdateValues else { return result }
     
     if needed.count > 0 {
       let urlString = "signalk/v1/api/wsk/paths"
@@ -411,14 +431,17 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
   override public func getSelfPath<T>(_ path: String, source: String?, completion: @escaping (Bool, SKValueBase, Error?) -> Void) -> SKValue<T> {
     let value : SKValue<T> = getOrCreateValue(path, source: source)
     
-    //Task {
-    Task.detached { @MainActor in
-      do {
-        let updated = try await self.updateVaue(value)
-        completion(updated, value, nil)
-      } catch {
-        completion(false, value, error)
+    if shouldUpdateValues {
+      Task.detached { @MainActor in
+        do {
+          let updated = try await self.updateVaue(value)
+          completion(updated, value, nil)
+        } catch {
+          completion(false, value, error)
+        }
       }
+    } else {
+      completion(true, value, nil)
     }
     
     return value
