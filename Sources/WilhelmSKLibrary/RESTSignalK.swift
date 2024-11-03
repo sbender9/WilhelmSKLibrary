@@ -105,16 +105,21 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     sessionConfig.timeoutIntervalForResource = 10
     let session = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
 
-    let (data, resp) = try await session.data(for:request)
+    let data :Data, resp: URLResponse
+    do {
+      (data, resp) = try await session.data(for:request)
+    } catch {
+      throw SignalKError.message(error.localizedDescription)
+    }
+
     let status = (resp as! HTTPURLResponse).statusCode
     guard status != 401 else { throw SignalKError.unauthorized }
-    
+
     if status == 404 && urlString.contains("/api/wsk/push/") {
       throw SignalKError.needsPushPlugin
     } else if status == 404 && urlString.contains("/api/wsk/") {
       throw SignalKError.needsWilhelmSKPlugin
     }
-
     guard status != 404 else { throw SignalKError.notFound }
     guard status == 200 else { throw SignalKError.message("Invalid server response \(status)") }
     //debug(status)
