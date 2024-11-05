@@ -13,11 +13,12 @@ private let putCheckInterval = 1.0
 private let putCheckRetryCount = 8
 
 @available(iOS 17, *)
-open class RESTSignalK : SignalKBase, URLSessionDelegate {
+open class RESTSignalK : SignalKBase, URLSessionDelegate, URLSessionTaskDelegate {
   var scheme: String, host: String, port: Int
   var restEndpoint: String
   var updateRate: Double
   open var token : String?
+  open var cookies : [HTTPCookie]?
   public var cacheAge : TimeInterval = 1.0
   public var shouldUpdateValues = true
   
@@ -86,17 +87,37 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     //tasks.append(task)
   }
   
-  
-  //@MainActor
+
   func sendHttpRequest(urlString: String, method: String, body: Any?) async throws -> Data {
     guard let url = URL(string: "\(restEndpoint)\(urlString)") else { throw SignalKError.invalidUrl }
+    return try await sendRawHttpRequest(url: url, method: method, body: body)
+  }
+  
+  open func sendRawHttpRequest(url: URL, method: String, body: Any?, headers: [String:String]? = nil) async throws -> Data {
     var request = URLRequest(url: url)
     request.httpMethod = method
     if let body {
       request.httpBody = try JSONSerialization.data(withJSONObject: body)
     }
     
+    if let cookies {
+      let headers = HTTPCookie.requestHeaderFields(with: cookies)
+      for (key, val) in headers {
+        request.setValue(val, forHTTPHeaderField: key)
+      }
+    }
+    
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    if let token {
+      request.setValue("JWT \(token)", forHTTPHeaderField: "X-Authorization")
+    }
+    
+    if let headers {
+      for (key, value) in  headers {
+        request.setValue(value, forHTTPHeaderField: key)
+      }
+    }
     
     debug("sending \(method) requeest for \(url)")
     
@@ -115,9 +136,9 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     let status = (resp as! HTTPURLResponse).statusCode
     guard status != 401 else { throw SignalKError.unauthorized }
 
-    if status == 404 && urlString.contains("/api/wsk/push/") {
+    if status == 404 &&  url.absoluteString.contains("/api/wsk/push/") {
       throw SignalKError.needsPushPlugin
-    } else if status == 404 && urlString.contains("/api/wsk/") {
+    } else if status == 404 && url.absoluteString.contains("/api/wsk/") {
       throw SignalKError.needsWilhelmSKPlugin
     }
     guard status != 404 else { throw SignalKError.notFound }
@@ -130,6 +151,37 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     //debug("reposonse from GET request: \(dict)")
     
     return data
+  }
+  
+  open func sendRawHttp(url: URL, method: String, body: Any?, headers: [String:String]? = nil) async throws -> (Data, HTTPURLResponse) {
+    var request = URLRequest(url: url)
+    request.httpMethod = method
+    if let body {
+      request.httpBody = try JSONSerialization.data(withJSONObject: body)
+    }
+    
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    if let headers {
+      for (key, value) in  headers {
+        request.setValue(value, forHTTPHeaderField: key)
+      }
+    }
+    
+    debug("sending \(method) requeest for \(url)")
+    
+    let sessionConfig = URLSessionConfiguration.default
+    sessionConfig.timeoutIntervalForRequest = 10
+    sessionConfig.timeoutIntervalForResource = 10
+    let session = URLSession(configuration: sessionConfig, delegate: self, delegateQueue: nil)
+    
+    let data :Data, resp: URLResponse
+    do {
+      (data, resp) = try await session.data(for:request, delegate: self)
+    } catch {
+      throw SignalKError.message(error.localizedDescription)
+    }
+    return (data, resp as! HTTPURLResponse)
   }
 
   public func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
@@ -149,7 +201,18 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     request.httpMethod = method
     request.httpBody = body
     
+    if let cookies {
+      let headers = HTTPCookie.requestHeaderFields(with: cookies)
+      for (key, val) in headers {
+        request.setValue(val, forHTTPHeaderField: key)
+      }
+    }
+
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    
+    if let token {
+      request.setValue("JWT \(token)", forHTTPHeaderField: "X-Authorization")
+    }
     
     let sessionConfig = URLSessionConfiguration.default
     sessionConfig.timeoutIntervalForRequest = 10
@@ -190,7 +253,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
   
   
   @MainActor
-  private func updateVaue(_ value: SKValueBase) async throws -> Bool {
+  open func updateVaue(_ value: SKValueBase) async throws -> Bool {
     
     guard shouldUpdateValues else { return true }
     
@@ -279,7 +342,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
   }
   
   //@MainActor
-  override public func getObservableSelfPath<T>(_ path: String, source: String? = nil) -> SKValue<T>
+  override open func getObservableSelfPath<T>(_ path: String, source: String? = nil) -> SKValue<T>
   {
     let value : SKValue<T> = getOrCreateValue(path, source: source)
     
@@ -297,7 +360,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
   }
  
   //@MainActor
-  override public func getSelfPath<T>(_ path: String, source: String? = nil) async throws -> SKValue<T>
+  override open func getSelfPath<T>(_ path: String, source: String? = nil) async throws -> SKValue<T>
   {
     let value : SKValue<T> = getOrCreateValue(path, source: source)
     
@@ -306,7 +369,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     return value
   }
   
-  override public func getSelfPaths(_ paths: [PathRequest]) async throws -> [String:SKValueBase] {
+  override open func getSelfPaths(_ paths: [PathRequest]) async throws -> [String:SKValueBase] {
     var result : [String:SKValueBase] = [:]
     var needed : [PathRequest]
     
@@ -350,6 +413,8 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
       
       do {
         let data = try await sendHttpRequest(urlString: urlString, method:"POST", body:post)
+        let str = String(decoding: data, as: UTF8.self)
+        debug("got paths \(str)")
         guard let info = try JSONSerialization.jsonObject(with: data, options: []) as? [String:[String:Any]]
         else { throw SignalKError.invalidServerResponse }
 
@@ -370,7 +435,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     return result
   }
 
-  
+  /*
   override public func getSelfPath<T>(_ path: String, source: String?, uuid: String, delegate: SessionDelegate) -> SKValue<T> {
     
     let req = PathRequest(path: path, type: String(describing: T.self), source: source)
@@ -451,6 +516,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate {
     
     return value
   }
+  */
   
   func processResponse(_ res: [String:Any],
                        path: String,
