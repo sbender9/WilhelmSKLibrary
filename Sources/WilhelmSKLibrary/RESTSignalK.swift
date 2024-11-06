@@ -135,6 +135,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate, URLSessionTaskDelegate
 
     let status = (resp as! HTTPURLResponse).statusCode
     guard status != 401 else { throw SignalKError.unauthorized }
+    guard status != 403 else { throw SignalKError.forbidden }
 
     if status == 404 &&  url.absoluteString.contains("/api/wsk/push/") {
       throw SignalKError.needsPushPlugin
@@ -222,6 +223,7 @@ open class RESTSignalK : SignalKBase, URLSessionDelegate, URLSessionTaskDelegate
     
     let status = (resp as! HTTPURLResponse).statusCode
     guard status != 401 else { throw SignalKError.unauthorized }
+    guard status != 403 else { throw SignalKError.forbidden }
     guard status != 404 else { throw SignalKError.notFound }
 
     guard status == 200 || status == 202 else { throw SignalKError.message("Invalid server response \(status)") }
@@ -911,6 +913,7 @@ public enum SignalKError: LocalizedError, CustomLocalizedStringResourceConvertib
   case needsWilhelmSKPlugin
   case needsPushPlugin
   case notFound
+  case forbidden
   case message(_ message: String)
   
   public var localizedStringResource: LocalizedStringResource {
@@ -923,6 +926,7 @@ public enum SignalKError: LocalizedError, CustomLocalizedStringResourceConvertib
       case .needsWilhelmSKPlugin: return "Please install and enable the WilhelmSK Plugin"
       case .needsPushPlugin: return "Please install and enable the signalk-push-plugin"
       case .notFound: return "Path not found"
+      case .forbidden: return "Forbidden"
     }
   }
   
@@ -936,6 +940,7 @@ public enum SignalKError: LocalizedError, CustomLocalizedStringResourceConvertib
       case .needsWilhelmSKPlugin: return "Please install and enable the WilhelmSK Plugin"
       case .needsPushPlugin: return "Please install and enable the signalk-push-plugin"
       case .notFound: return "Path not found"
+      case .forbidden: return "Forbidden"
     }
   }
   
